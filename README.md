@@ -4,7 +4,7 @@ prerequisites:
 - модули python:
 pyxyz (https://gitlab.com/knvvv/pyxyz), pandas, numpy
 
-- модифицированный CP2K (...):
+- модифицированный CP2K (https://github.com/Artem021/CP2K.git):
 
 
 Запуск расчета H-REMD:
