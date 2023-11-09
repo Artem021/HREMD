@@ -1,0 +1,99 @@
+ &GLOBAL
+   PRINT_LEVEL MEDIUM
+   PROJECT PAM
+   RUN_TYPE GEO_OPT
+   SEED 1642
+ &END GLOBAL
+ &FORCE_EVAL
+   METHOD FIST
+   &MM
+     &FORCEFIELD
+       DO_NONBONDED T
+       ALL_EI_SCALE 1.0
+       ALL_VDW_SCALE 1.0
+       EI_SCALE14 1.0
+       VDW_SCALE14 1.0
+       FORCE_SCALE 1.0
+       PARMTYPE AMBER
+       PARM_FILE_NAME paracetamol-orthorhombic.prmtop
+       SHIFT_CUTOFF F
+       &SPLINE
+         EMAX_SPLINE 1.0E+08
+         RCUT_NB [angstrom] 1.0E+01
+       &END SPLINE
+     &END FORCEFIELD
+     &POISSON
+       &EWALD
+         ALPHA .35
+         EWALD_TYPE EWALD
+         GMAX 25
+       &END EWALD
+       PERIODIC XYZ
+     &END POISSON
+   &END MM
+   &RESCALE_FORCES
+     MAX_FORCE 10
+   &END RESCALE_FORCES
+   STRESS_TENSOR ANALYTICAL
+   &SUBSYS
+     &CELL
+       ABC [angstrom] 11.8050  17.1640  7.3930
+       ALPHA_BETA_GAMMA 90.00 90.00 90.00
+       PERIODIC XYZ
+     &END CELL
+     &TOPOLOGY
+       &CENTER_COORDINATES
+         CENTER_POINT 0 0 0
+       &END CENTER_COORDINATES
+       CONN_FILE_FORMAT AMBER
+       CONN_FILE_NAME paracetamol-orthorhombic.prmtop
+       COORD_FILE_FORMAT XYZ
+       COORD_FILE_NAME struc.xyz
+     &END TOPOLOGY
+   &END SUBSYS
+ &END FORCE_EVAL
+ &MOTION
+   &GEO_OPT
+     MAX_ITER 1000
+   &END GEO_OPT
+   &MD
+     &VELOCITY_SOFTENING
+       STEPS 100
+       ALPHA 0.15
+       DELTA  0.1
+     &END VELOCITY_SOFTENING
+     ENSEMBLE NVT
+     STEPS 1000
+     TEMPERATURE 298
+     &THERMOSTAT
+       &CSVR
+         TIMECON [fs] 0.5
+       &END CSVR
+       REGION GLOBAL
+       TYPE CSVR
+     &END THERMOSTAT
+     TIMESTEP [fs] 2.0
+   &END MD
+   &PRINT
+     &RESTART
+       BACKUP_COPIES 0
+       &EACH
+         MD 0
+         GEO_OPT 0
+       &END EACH
+     &END RESTART
+     &RESTART_HISTORY
+       &EACH
+         MD 0
+         GEO_OPT 0
+       &END EACH
+     &END RESTART_HISTORY
+     &TRAJECTORY
+       &EACH
+         MD 5
+         GEO_OPT 1
+       &END EACH
+       FORMAT XYZ
+     &END TRAJECTORY
+   &END PRINT
+ &END MOTION
