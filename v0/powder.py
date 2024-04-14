@@ -1,6 +1,6 @@
 import os, subprocess, shutil, time
 import numpy as np
-import xtb_IO
+import base_utils
 from multiprocessing import Pool
 # MAX_PROC = 20
 C2_PATH = '/home/artem/'
@@ -32,7 +32,7 @@ def run_opt(i,xyz,top=TOPopt,trj=TRJopt,inp=INPopt):
         return f'frame {i}: optimization is down!'
     else:
         with open('struc-opt.xyz','w') as fo:
-            xyzopt = xtb_IO.get_frame_xyz(trj,-1)
+            xyzopt = base_utils.get_frame_xyz(trj,-1)
             fo.write(xyzopt)
     os.chdir('..')
     return f'frame {i}: Normal termination!'
@@ -112,10 +112,10 @@ def calc_xrd_matrix():
 def calc_xrd_seq(XYZ, CELL, OUT, REF_CIF,delete_cif=True):
     t0=time.time()
     # 0. convert trajectory to .pdb
-    xtb_IO.xyz_to_pdb(XYZ,CELL)
+    base_utils.xyz_to_pdb(XYZ,CELL)
     # 1. create separate .cif files
     if delete_cif:
-        xtb_IO.process_traj_xyz(
+        base_utils.process_traj_xyz(
             fname=XYZ,
             traj_pdb=None,
             dump_pdb=False,
@@ -204,9 +204,9 @@ def calc_xrd(XYZ, CELL, OUT, REF_CIF, MAX_PROC):
     #         }
 
     # 0. convert trajectory to .pdb
-    xtb_IO.xyz_to_pdb(XYZ,CELL)
+    base_utils.xyz_to_pdb(XYZ,CELL)
     # 1. create separate .cif files
-    xtb_IO.process_traj_xyz(
+    base_utils.process_traj_xyz(
         fname=XYZ,
         traj_pdb=None,
         dump_pdb=False,

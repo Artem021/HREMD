@@ -99,6 +99,36 @@ DEFAULT_PARM = {
 
 SPECIAL_SIGNS = {'elements':':','distance':':','sphere':':'}
 
+DEFAULT_LAMMPS = {
+    "variable N": "equal 1000",
+    "clear": "",
+    "units": "real",
+    "atom_style": "full",
+    "dimension": "3",
+    "boundary": "p p p",
+    "special_bonds": "lj 0.0 0.0 0.5 coul 0.0 0.0 0.8333333333",
+    "pair_style": "lj/cut/coul/long 8.0",
+    "bond_style": "harmonic",
+    "angle_style": "harmonic",
+    "dihedral_style": "opls",
+    "improper_style": "cvff",
+    "read_data": "PAM.data",
+    "kspace_style": "pppm 1.0e-4",
+    "kspace_modify": "gewald 0.00001",
+    "neighbor": "2.0 bin",
+    "neigh_modify": "delay 10 every 1 check yes",
+    "timestep": "2.0",
+    "velocity": "all create 273.15 23432 dist gaussian mom no rot no",
+    "thermo_style": "custom time temp pe ke press vol density",
+    "thermo": "10",
+    "fix": "1 all npt temp 273.15 273.15 20.0 tri 1.0 1.0 500.0",
+    "dump": "TRJ all custom 1 dump.xyz element x y z",
+    "dump_modify": "TRJ element C N C C H C H C O H C H C H H C H H H O",
+    "run": "$N"
+}
+
+
+
 def get_fractional_to_cartesian_matrix(a, b, c, alpha, beta, gamma,
                                        angle_in_degrees=True):
     """
@@ -234,25 +264,6 @@ def write_input_cp2k(parm,fname='cp2k.inp'):
     with open(fname,'w') as fo:
         fo.write(write_cp2k(parm))
 
-# import json
-
-# sections = read_cp2k('cp2k.inp')
-# print(sections)
-
-# print(sections['FORCE_EVAL'][0]['MM'][0]['FORCEFIELD'][0]['FORCE_SCALE'][0])
-# print(json.dumps(sections,sort_keys=True, indent=4))
-
-# exit()
-
-# with open('cp2k2.inp','w') as fo:
-#     txt = write_cp2k(sections)
-#     fo.write(txt)
-
-
-
-
-
-
 def reverse_readline(filename, buf_size=8192):
     """A generator that returns the lines of a file in reverse order"""
     with open(filename) as fh:
@@ -292,7 +303,7 @@ def update_parm(new,base=DEFAULT_PARM):
         base[section].update(new[section])
     return base
 
-def write_input(parm,fname='xtb.inp'):
+def write_input_xtb(parm,fname='xtb.inp'):
     with open(fname,'w') as fo:
         for section in parm:
             fo.write(section+'\n')
@@ -323,6 +334,120 @@ def parse_input(fname='xtb.inp'):
             keys[kw] = val
     return parm
 
+def write_input_lammps(parm,fname='lammps.inp'):
+    M = max([len(i) for i in parm])
+    with open(fname,'w') as inp:
+        for key in parm:
+            line = key.ljust(M+2) + parm[key]+'\n'
+            inp.write(line)
+
+def read_input_lammps(fname):
+    parm = {}
+    with open(fname,'r') as fi:
+        for line in fi:
+            line = line.strip()
+            if line == '':
+                continue
+            if '#' in line:
+                if line[0] == '#':
+                    continue
+                else:
+                    line = line.split('#',1)[0]
+            words = line.split()
+            if 'variable' in line:
+                var = words.pop(0)
+                x = words.pop(0)
+                parm[f'{var} {x}'] = ' '.join(words)
+                continue
+            if 'clear' in line:
+                parm['clear'] = ''
+                continue
+            key = words.pop(0)
+            val = ' '.join(words)
+            parm[key] = val
+    return parm
+
+def scale_charges(fname, alpha):
+    lines = []
+    with open(fname,'r') as fi:
+        while True:
+            line = fi.readline()
+            if line == '':
+                break
+            lines.append(line)
+            if 'Atoms' in line:
+                sep = fi.readline()
+                lines.append(sep)
+                while True:
+                    line = fi.readline()
+                    try:
+                        iat, imol, iat2, ch, x, y, z = line.split()
+                        ch = f'{float(ch)*alpha**0.5:.6f}'
+                        line = ' '.join([iat, imol, iat2, ch, x, y, z]) + '\n'
+                        lines.append(line)
+                    except:
+                        lines.append(line)
+                        break
+    with open(fname+'M','w') as fo:
+        for line in lines:
+            fo.write(line)
+
+def scale_epsilon(fname, alpha):
+    lines = []
+    with open(fname,'r') as fi:
+        while True:
+            line = fi.readline()
+            if line == '':
+                break
+            lines.append(line)
+            if 'Pair Coeffs' in line:
+                sep = fi.readline()
+                lines.append(sep)
+                while True:
+                    line = fi.readline()
+                    try:
+                        iat, eps, sigma = line.split()
+                        eps = f'{float(eps)*alpha:.15f}'
+                        line = ' '.join([iat,eps, sigma]) + '\n'
+                        lines.append(line)
+                    except:
+                        lines.append(line)
+                        break
+    with open(fname+'M','w') as fo:
+        for line in lines:
+            fo.write(line)
+
+def update_inp(fname, vars):
+    with open(fname,'r') as fi:
+        lines = fi.readlines()
+    with open(fname,'w') as fo:
+        for line in lines:
+            if 'variable' in line:
+                _,vname,vtype,vval = line.split()
+                if vname in vars:
+                    # print(f'variable {vname}: {vval} --> {vars[vname]}')
+                    vval = vars[vname]
+                line = f'variable {vname} {vtype} {vval}\n'
+            fo.write(line)
+            
+
+# update_inp('/home/artem/LAMMPS_TEST/30.03-PAM-test0/0.000e+00/lammps.restart',{'alpha':1.0})
+# print(0)
+
+# vars = {'alpha':0.5, 't':'traj-1.xyz','r':'PAM.restart-step10','S':0}
+# os.chdir('/home/artem/HREMD/src/')
+# update_inp('lammps.inp',vars)
+
+# scale_charges('PAM.data0MM',0.0)
+# scale_epsilon('PAM.data0M',0.0)
+
+# print(0)
+
+# read_lammps = read_input_lammps('PAM.lmp')
+# write_input_lammps(read_lammps,'PAMm.lmp')
+# read_lammps['timestep'] = '4.0'
+# write_input_lammps(read_lammps,'LAMMPS-TEST2.inp')
+
 def get_frame_xyz(fname,index=-1,frames=None,as_np=False,nmax=1000):
     xyz = []
     na = 0
@@ -331,7 +456,7 @@ def get_frame_xyz(fname,index=-1,frames=None,as_np=False,nmax=1000):
         while True:
             line = next(lines).strip()
             # line = line.strip()
-            if 'xtb' in line or 'time' in line or 'E =' in line:
+            if 'xtb' in line or 'time' in line or 'E =' in line or 'Timestep' in line:
                 comment = line
                 break
             if na > nmax:
@@ -360,7 +485,7 @@ def get_frame_xyz(fname,index=-1,frames=None,as_np=False,nmax=1000):
             buf = collections.deque([line1],nat+3)
             while True:
                 line = fi.readline().strip()
-                if 'xtb' in line or 'time' in line:
+                if 'xtb' in line or 'time' in line or 'E =' in line or 'Timestep' in line:
                     nframes+=1
                 if nframes > index+1:
                     break
@@ -381,7 +506,7 @@ def get_frame_xyz(fname,index=-1,frames=None,as_np=False,nmax=1000):
             else:
                 return '\n'.join(buf)
 
-def get_frame_xyz2(fname,index=-1,as_np=False): # TODO replace get_frame_xyz
+def get_frame_xyz2(fname,index=-1,as_np=False,nmax=1000): # TODO replace get_frame_xyz
     nread = 0
     xyz = []
     assert type(index)==int or type(index)==list, 'provide integer or list'
@@ -464,6 +589,39 @@ def get_frame_xyz2(fname,index=-1,as_np=False): # TODO replace get_frame_xyz
                 return xyz_np
             else:
                 return '\n'.join(buf)
+
+def getXyzfromData(path):
+    key = 'Atoms'
+    nextKey = 'Bonds'
+    natoms = 0
+    xyz = []
+    with open(path,'r') as fi:
+        lines = iter(fi.readlines())
+        read = False
+        while True:
+            line = next(lines)
+            if nextKey in line or line == '' or read==True:
+                raise RuntimeError('Incorrect data file')
+            if key in line:
+                while True:
+                    # row = next(lines).split()
+                    row = next(lines)
+                    row = row.split()
+                    if row != []:
+                        try:
+                            *_, x, y, z = row[-3:]
+                            xyz.append('    '.join([x,y,z]))
+                            natoms+=1
+                        except:
+                            xyz.insert(0,f'structure from {path}')
+                            xyz.insert(0,f'{natoms}')
+                            return '\n'.join(xyz)
+
+# xyz =  get_frame_xyz('/home/artem/LAMMPS_TEST/30.03-PAM-test0/0.000e+00/traj.xyz',28)
+
+# print(xyz)
+# print(0)
+
 
 # xyz = get_frame_xyz('example/xtb.trj',-1)
 # with open('test-m.xyz','w') as fo:
@@ -611,19 +769,19 @@ def xyz_to_pdb(traj_xyz, cell, traj_pdb=None, as_np=False):
 # os.chdir('/home/artem/paracetamol/pdb_vs_xyz/')
 # xyz_to_pdb('traj.xyz',traj_pdb='test.pdb')
 
-CELL={
-            'a':11.8050,
-            'b':17.1640,
-            'c':7.3930,
-            'alpha':90.00,
-            'beta':90.00,
-            'gamma':90.00,
-            'SpGr': 'Pcab'
-        }
+# CELL={
+#             'a':11.8050,
+#             'b':17.1640,
+#             'c':7.3930,
+#             'alpha':90.00,
+#             'beta':90.00,
+#             'gamma':90.00,
+#             'SpGr': 'Pcab'
+#         }
 
 
 # os.chdir('/home/artem/PAM/24.10-6ns/')
-xyz_to_pdb('/home/artem/PAM/24.10-6ns/1.000e+00/min.xyz',CELL)
+# xyz_to_pdb('/home/artem/PAM/24.10-6ns/1.000e+00/min.xyz',CELL)
 # print(0)
 
 if TEST:
@@ -645,6 +803,6 @@ if TEST:
     print(xyz_np)
 
     # write/parse
-    write_input(DEFAULT_PARM,'xtb.inp')
+    write_input_xtb(DEFAULT_PARM,'xtb.inp')
     d = parse_input()
-    write_input(d,'xtb2.inp')
+    write_input_xtb(d,'xtb2.inp')

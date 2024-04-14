@@ -1,7 +1,7 @@
  &GLOBAL
    PRINT_LEVEL MEDIUM
    PROJECT PAM
-   RUN_TYPE GEO_OPT
+   RUN_TYPE MD
    SEED 1642
  &END GLOBAL
  &FORCE_EVAL
@@ -13,7 +13,7 @@
        ALL_VDW_SCALE 1.0
        EI_SCALE14 1.0
        VDW_SCALE14 1.0
-       FORCE_SCALE 1.0
+       FORCE_SCALE 0.9
        PARMTYPE AMBER
        PARM_FILE_NAME paracetamol-orthorhombic.prmtop
        SHIFT_CUTOFF F
@@ -48,14 +48,11 @@
        CONN_FILE_FORMAT AMBER
        CONN_FILE_NAME paracetamol-orthorhombic.prmtop
        COORD_FILE_FORMAT XYZ
-       COORD_FILE_NAME struc.xyz
+       COORD_FILE_NAME guess-1.xyz
      &END TOPOLOGY
    &END SUBSYS
  &END FORCE_EVAL
  &MOTION
-   &GEO_OPT
-     MAX_ITER 1000
-   &END GEO_OPT
    &MD
      &VELOCITY_SOFTENING
        STEPS 100
@@ -79,19 +76,16 @@
        BACKUP_COPIES 0
        &EACH
          MD 0
-         GEO_OPT 0
        &END EACH
      &END RESTART
      &RESTART_HISTORY
        &EACH
          MD 0
-         GEO_OPT 0
        &END EACH
      &END RESTART_HISTORY
      &TRAJECTORY
        &EACH
          MD 5
-         GEO_OPT 1
        &END EACH
        FORMAT XYZ
      &END TRAJECTORY
