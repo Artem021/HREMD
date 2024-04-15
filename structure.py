@@ -220,7 +220,6 @@ class REMD:
             sim = engines.Simulation(alpha, wd, datafile, parm, vars, options)
             s0 = initStruc
             xyz0 = s0.getXyz()
-            print(len(xyz0.split()))
             struc = Structure(datafile, s0.a, s0.b, s0.c, s0.alpha, s0.beta, s0.gamma, xyz=xyz0) # TODO: make it more obvious
             world = (alpha, struc, sim, *other)
             aSet.append(world)
@@ -341,11 +340,13 @@ class REMD:
             if step%self.Ncheck==0:
                 if self.addWorlds and len(self.alphaSet) < self.Nmax:
                     alphas = [w[0] for w in self.alphaSet]
+                    offset = 0
                     for i,n in enumerate(self.swapCount):
                         if n <= self.Ncheck*self.Pmin//100: # т.е., обмены данной пары происходили с вероятностью менее Pmin
                             a1 = alphas[i]
                             a2 = alphas[i+1]
-                            self.addWorld(0.5*(a1+a2), i+1, parm = self.initParm, vars = self.initVars, options = self.initOptions, *self.initOther)
+                            self.addWorld(0.5*(a1+a2), i+1+offset, parm = self.initParm, vars = self.initVars, options = self.initOptions, *self.initOther)
+                            offset+=1
                 if self.delWorlds:
                     for i,n in enumerate(self.swapCount[1:]):
                         if n >= self.Ncheck*self.Pmax//100:

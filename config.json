@@ -1,43 +1,34 @@
 {
     "GLOBAL": {
-        "JobName": "14.04-dbg-f",
+        "JobName": "15.04-test",
         "CalcDir": "/home/artem/LAMMPS_TEST/",
         "Seed": 999999,
-        "Temperature": 273.15,
+        "Temperature": 298.15,
         "EnergyUnits" : "real",
         "LAMMPS_PATH" : "/home/artem/LAMMPS/lammps-static/bin/",
         "DataFile" : "/home/artem/HREMD/src/lammps.data",
         "XyzFile" : null,
-        "MDsteps" : 500,
-        "Iterations": 10,
+        "MDsteps" : 2500,
+        "Iterations": 100,
         "AlphaRange": [
-            0.9,
-            0.9,
-            0.9,
-            0.9,
-            0.9,
-            0.9,
-            0.9,
-            0.9,
-            0.9,
-            0.9,
+            0.0,
             1.0
         ]
     },
     "REMD_Options": {
         "unrestrictedExchange" : false,
         "selectLastStruc" : true,
-        "changeOrder" : false,
+        "changeOrder" : true,
         "addWorlds" : true,
         "delWorlds" : false,
         "Pmin" : 10,
         "Pmax" : 80,
-        "Ncheck" : 5,
+        "Ncheck" : 10,
         "Nmax" : 15
     },
     "LAMMPS_Options": {
         "minBeforeMD" : true,
         "minAfterMD" : false,
-        "doLongES" : true
+        "doLongES" : false
     }
 }
