@@ -1,5 +1,6 @@
-import json, os, subprocess
-from structure import REMD
+import json, os, subprocess, sys
+from structure import REMD, optimizeFrames
+import base_utils
 
 with open(f'config.json','r') as parm:
     parms = json.load(parm)
@@ -12,15 +13,21 @@ JobName, CalcDir, Seed, Temperature, EnergyUnits, LAMMPS_PATH, DataFile, \
         'DataFile', 'XyzFile', 'MDsteps', 'Iterations', 'AlphaRange'))
 
 unrestrictedExchange, selectLastStruc, changeOrder, addWorlds, delWorlds, Pmin, \
-    Pmax, Ncheck, Nmax = map(REMDSettings.get, ('unrestrictedExchange',\
+    Pmax, Ncheck, Nmax, NPTs = map(REMDSettings.get, ('unrestrictedExchange',\
         'selectLastStruc', 'changeOrder', 'addWorlds', 'delWorlds', 'Pmin', 'Pmax', \
-        'Ncheck', 'Nmax'))
+        'Ncheck', 'Nmax', 'withNPT'))
 
 wd = os.path.join(CalcDir,JobName)
 
-os.environ['PATH'] = LAMMPS_PATH
-if subprocess.call('lmp -help',shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
-    raise RuntimeError(f'LAMMPS not found in {LAMMPS_PATH}')
+os.environ["PATH"] += os.pathsep + LAMMPS_PATH
+try:
+    subprocess.call(['lmp','-help'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+except FileNotFoundError:
+    print(f'LAMMPS executable not found, check path: {LAMMPS_PATH}')
+    sys.exit()
+
+elem = base_utils.getElementsLmp(DataFile)
+
 
 vars = {
     'N' : MDsteps,
@@ -28,7 +35,14 @@ vars = {
     'T' : Temperature
 }
 
-remdSim = REMD(AlphaRange, DataFile, wd, Nmax=Nmax, seed=Seed, T=Temperature, vars=vars, options=options)
+parm = {
+    'dump_modify' : 'DUMPFILE element '+' '.join(elem),
+    'improper_style' : 'umbrella',
+    'dihedral_style' : 'harmonic'
+    } # TODO: add feature to getXyzfromData()
+
+
+remdSim = REMD(AlphaRange, DataFile, wd, Nmax=Nmax, seed=Seed, T=Temperature, vars=vars, NPTs = NPTs, selectLastStruc=selectLastStruc,options=options, parm=parm)
 
 remdSim.unrestrictedExchange = unrestrictedExchange
 remdSim.selectLastStruc = selectLastStruc
@@ -39,6 +53,13 @@ remdSim.Pmin = Pmin
 remdSim.Pmax = Pmax
 remdSim.Ncheck = Ncheck
 
-
 remdSim.runREMD(Niter)
+optimizeFrames(os.path.join(wd,'structures.xyz'), DataFile, parm = {
+# optimizeFrames('/home/artem/LAMMPS_TEST/macro/22.06/structures.xyz', DataFile, parm = {
+    'minimize' : '1.0e-4 1.0e-6 5000 1000', 
+    'write_dump' : ' all xyz $t modify element '+' '.join(elem),
+    'improper_style' : 'umbrella',
+    'dihedral_style' : 'harmonic'
+    }, options = {'optimize' : True})
+print(0)
 

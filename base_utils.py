@@ -1,7 +1,11 @@
-import os, re, collections, shutil
+import os, re, collections, shutil, json, sys
 import numpy as np
 
 TEST = False
+
+
+with open('data/PubChemElements_all.json','r') as dat:
+    ELEMENTS = json.load(dat)
 
 DEFAULT_PARM_CP2K = {
     'GLOBAL': {
@@ -429,7 +433,20 @@ def update_inp(fname, vars):
                     vval = vars[vname]
                 line = f'variable {vname} {vtype} {vval}\n'
             fo.write(line)
-            
+
+
+def guessElement(mass):
+    col = ELEMENTS['Table']['Columns']
+    rows = ELEMENTS['Table']['Row']
+    # elements = {row['Cell'][3]:row['Cell'][1] for row in rows}
+    elements = [row['Cell'][1] for row in rows]
+    masses = [float(row['Cell'][3]) for row in rows]
+    closest_mass = min(masses,key = lambda x: abs(x-mass))
+    element = elements[masses.index(closest_mass)]
+    print(f'element {element} guessed from mass, delta = {abs(mass-closest_mass)}')
+    return element
+
+
 
 # update_inp('/home/artem/LAMMPS_TEST/30.03-PAM-test0/0.000e+00/lammps.restart',{'alpha':1.0})
 # print(0)
@@ -448,6 +465,104 @@ def update_inp(fname, vars):
 # read_lammps['timestep'] = '4.0'
 # write_input_lammps(read_lammps,'LAMMPS-TEST2.inp')
 
+
+# 1. detect type of xyz - lammps or classic
+# 2. find N of atoms
+# 3. iteratively read all frames OR:
+# read frame by index OR:
+# read n frmaes by n indixes
+
+
+# + read unwrapped or common XYZ format
+# index could be an integer or list of integers
+# returns: list of coordinates
+def readXYZ(file,index=None):
+    frames = []
+    nf = 0
+    with open(file,'r') as fi:
+        nlines = sum(1 for i in fi)
+        fi.seek(0)
+        line = fi.readline()
+        if 'ITEM' in line:
+            offset = 1
+            while True:
+                if 'ITEM: ATOMS' in line:
+                    break
+                if 'ITEM: NUMBER OF ATOMS' in line:
+                    na = int(fi.readline())
+                    offset+=1
+                line = fi.readline()
+                offset+=1
+        else:
+            offset = 2
+            na = int(line)        
+        assert nlines%(na+offset)==0, 'corrupted or nonstandart xyz file'
+        nframes = nlines//(na+offset)
+        fi.seek(0)
+        lines = iter(fi.readlines())
+        if index !=None: # иначе возвращаем все фреймы
+            indices = []
+            if type(index) is list:
+                indices+=index
+            else:
+                indices.append(index)
+            for i in range(len(indices)):
+                ind = indices[i]
+                assert ind<nframes, f'wrong index requested: {ind}'
+                if ind<0:
+                    ind+=nframes
+                    assert ind>=0, f'wrong index requested: {indices[i]}'
+                    indices[i]=ind
+            indices = sorted(indices)
+        else:
+            indices = [i for i in range(nframes)]
+        while True:
+            for i in range(offset):
+                try:
+                    _ = next(lines)
+                except StopIteration:
+                    break
+            if nf==indices[0]:
+                xyz = []
+                xyz.append(f'{na}\n')
+                xyz.append(f'Frame {nf}\n')
+                for i in range(na):
+                    line = next(lines)
+                    row = line.split()
+                    el, x, y, z = row[-4:]
+                    xyz.append(' '.join([el, x, y, z]) + '\n')
+                frames.append(xyz)
+                indices.pop(0)
+                if len(indices)==0:
+                    break
+            else:
+                for i in range(na):
+                    _ = next(lines)
+            nf+=1
+    if len(frames)==1:
+        return frames[0]
+    return frames
+
+# xyz1 = readXYZ('/home/artem/LAMMPS/test/unwrap/traj.xyz')
+# xyz2 = readXYZ('/home/artem/LAMMPS/test/unwrap/traj-unwrap.xyz')
+            
+# xyz1 = readXYZ('/home/artem/LAMMPS/test/unwrap/traj.xyz',index=500)
+# xyz2 = readXYZ('/home/artem/LAMMPS/test/unwrap/traj-unwrap.xyz',index=-1)
+
+# # 
+# with open('/home/artem/LAMMPS/test/unwrap/trajM.xyz','w') as fo:
+#     for frame in xyz1:
+#         for line in frame:
+#             fo.write(line)
+
+# with open('/home/artem/LAMMPS/test/unwrap/traj-unwrapM.xyz','w') as fo:
+#     for frame in xyz2:
+#         for line in frame:
+#             fo.write(line)
+
+
+
+
 def get_frame_xyz(fname,index=-1,frames=None,as_np=False,nmax=1000):
     xyz = []
     na = 0
@@ -459,9 +574,9 @@ def get_frame_xyz(fname,index=-1,frames=None,as_np=False,nmax=1000):
             if 'xtb' in line or 'time' in line or 'E =' in line or 'Timestep' in line:
                 comment = line
                 break
-            if na > nmax:
-                raise RuntimeError(f'incorrect .xyz file: {fname}, check comment line \
-                    (must contain "xtb") and N atoms (if N > 1k, add "nmax = N" to call)')
+            # if na > nmax:
+            #     raise RuntimeError(f'incorrect .xyz file: {fname}, check comment line \
+            #         (must contain "xtb") and N atoms (if N > 1k, add "nmax = N" to call)')
             xyz.append(line)
             na+=1
         na0 = next(lines).strip()
@@ -590,32 +705,106 @@ def get_frame_xyz2(fname,index=-1,as_np=False,nmax=1000): # TODO replace get_fra
             else:
                 return '\n'.join(buf)
 
-def getXyzfromData(path):
-    key = 'Atoms'
-    nextKey = 'Bonds'
-    natoms = 0
+
+
+def getField(fobj, field):
+    fobj.seek(0)
+    content = []
+    # size = set()
+    lines = iter(fobj.readlines())
+    for line in lines:
+        line = line.partition('#')[0]
+        if field in line:
+            _ = next(lines)
+            while True:
+                line = next(lines)
+                line = line.partition('#')[0]
+                words = line.split()
+                if len(words)==0:
+                    return content
+                    # continue
+                # size.add(len(words))
+                # if len(size)>1:
+                    # return content
+                content.append(words)
+    print(f'Warning: no field "{field}" in data file')
+
+# file = '/home/artem/LAMMPS_TEST/macro.data'
+# with open(file,'r') as dat:
+#     print(getField(dat, 'Pair Coeffs'))
+#     print(getField(dat, 'Masses'))
+#     # print(getField(dat, 'Atoms'))
+#     at = getField(dat, 'Atoms')
+#     print(len(at))
+#     print(len(at[0]))
+
+def getElementsLmp(file):
+    elements = []
+    with open(file,'r') as dat:
+        masses = getField(dat,'Masses')
+    if masses==None:
+        print('unable to guess elements in data file, exit')
+        sys.exit()
+    for i in masses:
+        m = float(i[1])
+        el = guessElement(m)
+        elements.append(el)
+    return elements
+
+def getXyzLmp(file):
     xyz = []
-    with open(path,'r') as fi:
-        lines = iter(fi.readlines())
-        read = False
-        while True:
-            line = next(lines)
-            if nextKey in line or line == '' or read==True:
-                raise RuntimeError('Incorrect data file')
-            if key in line:
-                while True:
-                    # row = next(lines).split()
-                    row = next(lines)
-                    row = row.split()
-                    if row != []:
-                        try:
-                            *_, x, y, z = row[-3:]
-                            xyz.append('    '.join([x,y,z]))
-                            natoms+=1
-                        except:
-                            xyz.insert(0,f'structure from {path}')
-                            xyz.insert(0,f'{natoms}')
-                            return '\n'.join(xyz)
+    elements = getElementsLmp(file)
+    index_map = {str(i+1):el for i,el in enumerate(elements)}
+    with open(file,'r') as dat:
+        coord = getField(dat,'Atoms')
+    assert len(coord[0])==7, 'Only full atom style supported'
+    xyz.append(f'{len(coord)}\n')
+    xyz.append(f'Coordinates from datafile: {file}\n')
+    for row in coord:
+        *_, ni, _, x, y, z = row
+        el = index_map[ni]
+        xyz.append(' '.join([el, x, y, z]) + '\n')
+    return xyz
+
+
+
+        
+# e = getElementsLmp(file)
+# print(e)
+# xyz = getXyzLmp(file)
+
+# print(0)
+
+# def getXyzfromData(path):
+#     key = 'Atoms'
+#     nextKey = 'Bonds'
+#     natoms = 0
+#     xyz = []
+#     with open(path,'r') as fi:
+#         lines = iter(fi.readlines())
+#         read = False
+#         while True:
+#             line = next(lines)
+#             if nextKey in line or line == '' or read==True:
+#                 raise RuntimeError('Incorrect data file')
+#             if key in line:
+#                 while True:
+#                     # row = next(lines).split()
+#                     row = next(lines)
+#                     row = row.split()
+#                     if row != []:
+#                         try:
+#                             *_, x, y, z = row[-3:]
+#                             xyz.append('    '.join([x,y,z]))
+#                             natoms+=1
+#                         except:
+#                             xyz.insert(0,f'structure from {path}')
+#                             xyz.insert(0,f'{natoms}')
+#                             # return '\n'.join(xyz)
+#                             return xyz
+
+
+
 
 # xyz =  get_frame_xyz('/home/artem/LAMMPS_TEST/30.03-PAM-test0/0.000e+00/traj.xyz',28)
 

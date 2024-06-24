@@ -1,4 +1,4 @@
-import os,shutil
+import os,shutil, time
 import numpy as np
 import multiprocessing as mp
 import base_utils
@@ -14,8 +14,10 @@ class Structure:
         self.e = None
 
         self.topology = topology
+        # self.xyz = xyz
         if xyz == None:
-            self.xyz = base_utils.getXyzfromData(topology)
+            self.xyz = base_utils.getXyzLmp(topology)
+            # self.xyz = base_utils.getXyzfromData(topology)
         else:
             self.xyz = xyz
         self.a = a
@@ -40,7 +42,9 @@ class Structure:
         return self.xyz
     
     def changeXyz(self,xyz, energy=None, internal=False):
-        assert len(xyz.split('\n')) == len(self.xyz.split('\n')), 'number of atoms does not match' # TODO: check order of atoms
+        assert type(xyz) is list
+        assert len(xyz) == len(self.xyz), 'number of atoms does not match' # TODO: check order of atoms
+        # assert len(xyz.split('\n')) == len(self.xyz.split('\n')), 'number of atoms does not match' # TODO: check order of atoms
         self.xyz = xyz
         self.e = energy
 
@@ -151,26 +155,27 @@ Representation of REMD simulation
 class REMD:
     unrestrictedExchange = True
     changeOrder = False
-    selectLastStruc = True
+    # selectLastStruc = False
     addWorlds = True
     delWorlds = False
     Ncheck = 10 # number of iterations between attempts to change alpha set
     Pmin = 10 # в %
     Pmax = 80 # в %
+    
 
-    assert selectLastStruc == True, 'search for local minimum is not implemented'
+    # assert selectLastStruc == True, 'search for local minimum is not implemented'
     assert delWorlds is False, 'deleting worlds is not implemented'
 
-    def __init__(self, alphaRange, datafile, baseDir, Nmax=15, seed=999999, T=273.15, parm=None, vars=None, options=None, *other):
+    def __init__(self, alphaRange, datafile, baseDir, Nmax=15, seed=999999, T=273.15, NPTs=None, selectLastStruc=True,  parm=None, vars=None, options=None, *other):
         assert os.path.exists(datafile), f'Data file not found: {datafile}'
         assert len(alphaRange) > 1, 'Not enough initial worlds for REMD (N must be >=2)'
         assert Nmax >= len(alphaRange), f'The requested number of worlds ({len(alphaRange)}) exceeds Nmax = {Nmax}'
         try:
-            os.mkdir(baseDir)
-        except:
+            os.makedirs(baseDir)
+        except FileExistsError:
             print(f'Directory already exists: {baseDir}')
             shutil.rmtree(baseDir)
-            os.mkdir(baseDir)
+            os.makedirs(baseDir)
             # raise # ради сохранности предыдуших расчетов
         self.baseDir = baseDir
         self.dumpXYZ = os.path.join(baseDir,'structures.xyz')
@@ -185,12 +190,27 @@ class REMD:
         self.Nmax = Nmax
         self.seed = seed
         self.T = T
+        self.selectLastStruc = selectLastStruc
         self.beta = 1/(T * 1.987204259 * 10**-3) # assert kcal/mol TODO: pass as global argument
         self.Nadd = 0
         self.Ndel = 0
         self.Niter = 0
         self.initStruc = Structure(datafile, None, None, None, None, None, None)
         self.alphaSet = self._buildAlphaSet(alphaRange, self.initStruc, datafile, parm=self.initParm, vars=self.initVars, options=self.initOptions, *other)
+        self.idump = [i for i in range(len(self.alphaSet))]
+        
+        if NPTs != None: # TODO: more convinient and general way to do this?
+            if type(NPTs) is int:
+                assert NPTs < len(self.alphaSet), 'incorrect index'
+                self.alphaSet[NPTs][2]._updateOpt({'doNPT': True})
+                print(f'Flexible cell in world with alpha = {self.alphaSet[NPTs][0]}')
+            elif type(NPTs) is list:
+                for i in NPTs:
+                    self.alphaSet[i][2]._updateOpt({'doNPT': True})
+                    print(f'Flexible cell in world with alpha = {self.alphaSet[i][0]}')
+            else:
+                raise RuntimeError('unknown type, must be `list` or `integer`')
+
         self.swapCount = [0 for _ in range(len(self.alphaSet)-1)]
         self.Counter = ExchangeCounter(self.alphaSet, baseDir)
         self.randomGenerator = np.random.default_rng(self.seed)
@@ -217,7 +237,7 @@ class REMD:
             else:
                 nrep=0
             wds.append(wd)
-            sim = engines.Simulation(alpha, wd, datafile, parm, vars, options)
+            sim = engines.Simulation(alpha, wd, datafile, parm=parm, vars=vars, options=options)
             s0 = initStruc
             xyz0 = s0.getXyz()
             struc = Structure(datafile, s0.a, s0.b, s0.c, s0.alpha, s0.beta, s0.gamma, xyz=xyz0) # TODO: make it more obvious
@@ -240,21 +260,27 @@ class REMD:
             args.append((sim.WD, sim.IN_FNAME, sim.vars['d'], sim.ERR_FNAME, sim.TRJ_FNAME, sim.k, sim.patt))
         with mp.Pool(len(self.alphaSet)) as pool:
             # results = pool.map(self._runMDSingle, sims)
-            results = pool.map(engines.runLAMMPS, args)
+            results = pool.map(engines.runMD, args)
         for i, sim in enumerate(sims):
             sim.update(results[i])
         for i, struc in enumerate(strucs):
             if results[i]['exitCode']:
                 if i==len(self.alphaSet)-1:
-                    raise RuntimeError('ERROR termination: LAMMPS failed in unbiased world')
+                    print('WARNING: LAMMPS failed in unbiased world')
+                    # raise RuntimeError('ERROR termination: LAMMPS failed in unbiased world')
                 failed.append(self.alphaSet[i])
             else:
-                xyz = results[i]['lastStruc']['xyz']
-                e = results[i]['lastStruc']['energy'] # TODO: implement for lowest E structure
+                if self.selectLastStruc:
+                    xyz = results[i]['lastStruc']['xyz']
+                    e = results[i]['lastStruc']['energy']
+                else:
+                    xyz = results[i]['minEStruc']['xyz']
+                    e = results[i]['minEStruc']['energy']
+
                 struc.changeXyz(xyz,e)
                 good.append(self.alphaSet[i])
-        if len(failed) > len(good):
-            raise RuntimeError('ERROR termination : More than half of MDs failed')
+        if len(failed) == len(self.alphaSet):
+            raise RuntimeError('ERROR termination : All MDs failed')
         alpha1, _, sim1, *_ = good[-1]
         rst1 = sim1.getRestartFile()
         for w in failed:
@@ -288,6 +314,8 @@ class REMD:
         rf2 = sim2.getRestartFile()
         sim1.updateRestartFile(rf2)
         sim2.updateRestartFile(rf1)
+        sim1.updateXyz(xyz2)
+        sim2.updateXyz(xyz1)
 
     def _MHCycle(self):
         skipNext = False
@@ -307,6 +335,7 @@ class REMD:
                 continue
             p0 = self.randomGenerator.random()
             p = self._calcP(w1,w2)
+            # p=1 # REMOVE
             if p>=p0:
                 indices = (i,i+1)
                 pair = (w1,w2,p)
@@ -366,7 +395,7 @@ class REMD:
             wd = os.path.join(self.baseDir, f'{self.Nadd}-{alpha:.3e}')
         if datafile == None:
             datafile = self.initDataFile
-        sim = engines.Simulation(alpha, wd, datafile, parm, vars, options)
+        sim = engines.Simulation(alpha, wd, datafile, parm=parm, vars=vars, options=options)
         ps = self.initStruc
         xyz = ps.getXyz()
         e = ps.getEnergy()
@@ -392,9 +421,77 @@ class REMD:
             energy.append(struc.getEnergy())
         with open(self.dumpEnergy,'a') as fo:
             fo.write(''.join([f'{e:.6e}'.ljust(20) for e in energy]) + '\n')
-        xyz = struc.getXyz()
-        with open(self.dumpXYZ,'a') as fo:
-            fo.write(xyz+'\n')
+        # xyz = struc.getXyz()
+        # e = energy[-1]
+        # lines = xyz.split('\n')
+        for i,world in enumerate(self.alphaSet):
+            if i in self.idump:
+                alpha, struc, *_ = world
+                e = struc.getEnergy()
+                xyz = struc.getXyz()
+                print(f'dump xyz from H({alpha:.6f})')
+                xyz[1]=f'Energy = {e:.2f} kcal/mol\n'
+                with open(self.dumpXYZ,'a') as fo:
+                    for row in xyz:
+                        fo.write(row)
+        # xyz[1]=f'Energy = {e:.2f} kcal/mol\n'
+        # with open(self.dumpXYZ,'a') as fo:
+        #     for row in xyz:
+        #         fo.write(row)
+
+def optimize(args, kwargs):
+    wd, datafile, xyz = args
+    try:
+        os.mkdir(wd)
+    except:
+        shutil.rmtree(wd)
+        os.mkdir(wd)
+    # print(kwargs)
+    # print(*kwargs)
+    sim = engines.Simulation(1.0, wd, datafile, xyz = xyz, **kwargs)
+    args = (wd, sim.IN_FNAME, sim.vars['d'], sim.ERR_FNAME, sim.TRJ_FNAME, sim.k, sim.patt)
+    sim.prepare()
+    e0, e1, xyzopt = engines.runOpt(args)
+    print(f'Optimization: {e0:.2f} --> {e1:.2f} kcal/mol')
+    if xyzopt != None:
+        xyzopt[1] = f'Energy = {e1:.2f} kcal/mol\n'
+    shutil.rmtree(wd)
+    return xyzopt
+
+def optimizeFrames(trjfile, datafile, sort=True, maxp = 10, **kwargs):
+    args = []
+    XYZframes = base_utils.readXYZ(trjfile)
+    wd = os.path.dirname(os.path.abspath(trjfile))
+    optdir = os.path.join(wd, f'opt-{time.time()}')
+    os.mkdir(optdir)
+    os.chdir(optdir)
+    for i,frame in enumerate(XYZframes):
+        fname = f'{i+1}.xyz'
+        with open(fname,'w') as fo:
+            for line in frame:
+                fo.write(line)
+        args.append([(os.path.join(optdir, f'opt-{i+1}'), datafile, os.path.abspath(fname)),kwargs])
+    # print(args)
+    with mp.Pool(maxp) as pool:
+        # opt_frames = pool.starmap(optimize, args)
+        opt_frames = pool.starmap(optimize, args)
+    opt_frames = [i for i in opt_frames if i!=None]
+    if sort:
+        opt_frames = sorted(opt_frames, key= lambda x: float(x[1].split()[2]))
+    os.chdir(wd)
+    with open(trjfile[:-4]+'-opt.xyz','w') as fo:
+        for frame in opt_frames:
+            for line in frame:
+                fo.write(line)
+    print(f'Optimization of {len(XYZframes)} frames done')
+    print(f'Number of successful jobs: {len(opt_frames)}')
+    print(f'Number of failed jobs: {len(XYZframes)-len(opt_frames)}')
+    shutil.rmtree(optdir)
+
+
+
+
+
 
 # global parms: T, N, seed, units, LAMMPS path
 # global options: [options] + doMTD, unrestrictedExchange, selectLastStruc, addWorlds, delWorlds + Pmin, Pmax, Ncheck

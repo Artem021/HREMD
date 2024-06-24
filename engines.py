@@ -10,7 +10,9 @@ VARS = {
     'T' : 273.15,
     'd' : '',
     'r' : '',
-    't' : ''
+    't' : '',
+    'c' : '',
+    'ndump' : 0,
 }
 
 KEYS = {
@@ -35,6 +37,7 @@ KEYS = {
     'fix 1' : 'all nvt temp $T $T 20.0',
     'fix 2' : 'all adapt 0 pair lj/cut/coul/long/soft lambda * * v_alpha reset yes scale yes',
     'dump' : 'DUMPFILE all xyz 1 $t',
+    'write_dump' : ' all xyz $t modify element C N C C H C H C O H C H C H H C H H H O',
     'dump_modify' : 'DUMPFILE element C N C C H C H C O H C H C H H C H H H O',
     'min_style' : 'cg',
     'min_modify' : 'dmax 0.2',
@@ -52,7 +55,7 @@ THERMO_PATT = {
 }
 
     # TODO implement energy minimization
-def runLAMMPS(args):
+def runMD(args):
     WD, IN_FNAME, DATA_FNAME, ERR_FNAME, TRJ_FNAME, K, PATT, *_ = args
     os.chdir(WD)
     assert os.path.exists(IN_FNAME), 'Input file not found'
@@ -98,16 +101,47 @@ def runLAMMPS(args):
         return results
     else:
         assert os.path.exists(TRJ_FNAME), 'Trajectory file not found'
-        nMin = min(range(len(dE)), key=dE.__getitem__)
+        # nMin = min(range(len(dE)), key=dE.__getitem__)
+        nMin = min(range(len(dE)//2,len(dE)), key=dE.__getitem__)
+        print(dE)
         minEStruc, lastStruc, results = {}, {}, {}
         minEStruc['energy'], minEStruc['bias'], minEStruc['xyz'] = \
-            dE[nMin], dV[nMin], base_utils.get_frame_xyz(TRJ_FNAME,nMin*K)
+            dE[nMin], dV[nMin], base_utils.readXYZ(TRJ_FNAME,nMin*K)
         lastStruc['energy'], lastStruc['bias'], lastStruc['xyz'] = \
-            dE[-1], dV[-1], base_utils.get_frame_xyz(TRJ_FNAME)
+            dE[-1], dV[-1], base_utils.readXYZ(TRJ_FNAME, -1)
         results['time'], results['exitCode'], results['eShift'], \
             results['biasShift'], results['lastStruc'], results['minEStruc'] = \
                 t-t0, exc, dE, dV, lastStruc, minEStruc
         return results
+
+def runOpt(args):
+    WD, IN_FNAME, DATA_FNAME, ERR_FNAME, TRJ_FNAME, K, PATT, *_ = args
+    os.chdir(WD)
+    assert os.path.exists(IN_FNAME), 'Input file not found'
+    assert os.path.exists(DATA_FNAME), 'Data file not found'
+    # CMD = [os.path.join(LAMMPS_PATH,'lmp'), '-i', IN_FNAME]
+    CMD = ['lmp', '-i', IN_FNAME]
+    t0 = time.time()
+    proc = subprocess.Popen(CMD, stdout=subprocess.PIPE, universal_newlines=True)
+    iterstdout = iter(proc.stdout.readline, "")
+    for stdout_line in iterstdout:
+        if re.search('Energy initial, next-to-last, final',stdout_line) !=None:
+            final = next(iterstdout)
+            e0, _,  e1 = [float(i) for i in final.split()]
+    exc = proc.wait()
+    proc.stdout.close()
+    t = time.time()
+    if exc:
+        e0 = e1 = float('NaN')
+        xyz = None
+        print('WARNING: optimization failed for some reason')
+    else:
+        xyz = base_utils.readXYZ(TRJ_FNAME,0)
+    return (e0,e1,xyz)
+    
+    
+
+
 
 
 class Simulation:
@@ -119,9 +153,12 @@ class Simulation:
     OPTS = {
         'minBeforeMD' : True,
         'minAfterMD' : False,
-        'doLongES' : True
+        'doLongES' : True,
+        'doNPT' : False,
+        'unwrapXYZ' : False,
+        'optimize' : False
     }
-    def __init__(self,alpha,WD,datfile,parm = None, vars = None, options = None):
+    def __init__(self,alpha,WD,datfile,xyz = None, ndump = None, parm = None, vars = None, options = None):
 
         self.restart = False
         self._nrst = 0
@@ -178,6 +215,10 @@ class Simulation:
         self.vars['r'] = rname
         self.vars['t'] = self.TRJ_FNAME
         self.vars['alpha'] = alpha
+        if xyz != None:
+            self.vars['c'] = xyz
+        if ndump != None:
+            self.vars['ndump'] = ndump
 
     def _updateParm(self,parm):
         assert type(parm) is dict, 'dictionary object expected here'
@@ -195,7 +236,7 @@ class Simulation:
         assert type(options) is dict, 'dictionary object expected here'
         assert set(options).issubset(set(self.options)), f'Unknown options provided: {", ".join([f"{i}" for i in set(options)-set(self.options)])}'
         self.options.update(options)
-        print('MD settings were updated')
+        print('LAMMPS options were updated')
 
 
     def _checkParm(self):
@@ -259,76 +300,68 @@ class Simulation:
             nMin = min(range(len(dE)), key=dE.__getitem__)
             minEStruc, lastStruc, results = {}, {}, {}
             minEStruc['energy'], minEStruc['bias'], minEStruc['xyz'] = \
-                dE[nMin], dV[nMin], base_utils.get_frame_xyz(self.TRJ_FNAME,nMin*self.k)
+                dE[nMin], dV[nMin], base_utils.readXYZ(self.TRJ_FNAME,nMin*self.k)
             lastStruc['energy'], lastStruc['bias'], lastStruc['xyz'] = \
-                dE[-1], dV[-1], base_utils.get_frame_xyz(self.TRJ_FNAME)
+                dE[-1], dV[-1], base_utils.readXYZ(self.TRJ_FNAME, -1)
             results['time'], results['exitCode'], results['eShift'], \
                 results['biasShift'], results['lastStruc'], results['minEStruc'] = \
                     t-t0, exc, dE, dV, lastStruc, minEStruc
             return results
 
     def _writeInput(self):
+        block1 = ['units', 'atom_style', 'timestep', 'dimension', 'boundary', 'special_bonds', 'pair_style', 'bond_style', 'angle_style', 'dihedral_style', 'improper_style']
+        block2 = ['velocity','kspace_style', 'kspace_modify', 'neighbor', 'neigh_modify']
+        block3 = ['dump', 'dump_modify', 'thermo_style', 'thermo', 'fix 1', 'fix 2']
+        minimize = ['min_style', 'min_modify', 'minimize']
+        unused_opt = ['velocity', 'neighbor', 'neigh_modify', 'thermo_style', 'thermo', 'fix 1', 'fix 2', 'timestep']
+        unused_restart = ['velocity'] + block1
         os.chdir(self.WD)
-        keys = KEYS.copy()
+        keys = self.keys.copy()
+        # apply options
         if self.options['doLongES']:
-            keys['kspace_modify'] = 'gewald 0.001 compute yes'
+            keys['kspace_modify'] = keys['kspace_modify'].replace('compute no','compute yes')
         else:
-            keys['kspace_modify'] = 'gewald 0.001 compute no'
-        with open(self.IN_FNAME,'w') as fi:
-            for v in self.vars:
-                if type(self.vars[v]) is str:
-                    eq = 'string'
-                else:
-                    eq = 'equal'
-                fi.write(f'variable {v} {eq} {self.vars[v]}\n')
-            if self.restart:
-                fi.write('\nread_restart $d\n\n')
-            else:
-                fi.write('\nclear\n\n')
-                for v in [
-                    'units',
-                    'atom_style',
-                    'timestep',
-                    'dimension',
-                    'boundary',
-                    'special_bonds',
-                    'pair_style',
-                    'bond_style',
-                    'angle_style',
-                    'dihedral_style',
-                    'improper_style'
-                    ]:
-                    fi.write(f'{v} {keys[v]}\n')
-                fi.write('\nread_data $d\n\n')
-                fi.write(f'velocity {keys["velocity"]}\n')
-
-            for v in [
-                'kspace_style',
-                'kspace_modify',
-                'neighbor',
-                'neigh_modify',
-                'thermo_style',
-                'thermo',
-                'fix 1',
-                'fix 2'
-                ]:
-                fi.write(f'{v} {keys[v]}\n')
+            keys['kspace_modify'] = keys['kspace_modify'].replace('compute yes','compute no')
+        if self.options['doNPT']:
+            keys['fix 1'] = 'all npt temp $T $T 20.0 iso 1 1 500'
+        if self.options['unwrapXYZ']:
+            keys['dump'] = 'DUMPFILE all custom 1 $t element xu yu zu'
+            print('WARNING: atomic coordinates will be printed in unwrapped format')
+        read = '\n\nread_data $d\n\n'
+        if self.restart:
+            block2 = [i for i in block2 if i not in unused_restart]
+            read = '\nread_restart $d\n\n'
+        if self.vars['c'] != '':
+            read+=f"read_dump {self.vars['c']} {self.vars['ndump']} x y z box no format xyz\n\n"
+            print(f"coordinates taken from {self.vars['c']}, frame {self.vars['ndump']}")
+            self.vars['c'] = ''
+            self.vars['ndump'] = 0
+        if self.options['optimize']:
+            block1 = [i for i in block1 if i not in unused_opt]
+            block2 = [i for i in block2 if i not in unused_opt]
+            minimize+=['write_dump']
+        act_vars = [v for v in self.vars if v not in ['c','ndump']]
+        _vars = [f'variable {v} string {self.vars[v]}\n' if type(self.vars[v]) is str \
+                 else f'variable {v} equal {self.vars[v]}\n' for v in act_vars]
+        rows1 = [f'{v} {keys[v]}\n'for v in block1]
+        rows2 = [f'{v} {keys[v]}\n'for v in block2]
+        rows3 = [f'{v} {keys[v]}\n'for v in block3]
+        rowsm = [f'{v} {keys[v]}\n'for v in minimize]
+        # build order
+        if self.options['optimize']:
+            order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + rowsm
+        else:
+            order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + rows3 + ['\nreset_timestep 0\nrun $N\n\n\nwrite_restart $r']
             if self.options['minBeforeMD']:
-                fi.write(f'min_style {keys["min_style"]}\n')
-                fi.write(f'min_modify {keys["min_modify"]}\n')
-                fi.write(f'minimize {keys["minimize"]}\n')
-            for v in [
-                'dump',
-                'dump_modify'
-                ]:
-                fi.write(f'{v} {keys[v]}\n')
-
-            fi.write('\nrun $N\n\n')
+                order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + rowsm + rows3 + ['\nreset_timestep 0\nrun $N\n\n\nwrite_restart $r']
             if self.options['minAfterMD']:
                 print('WARNING: minimization after MD not implemented, skip it')
-            fi.write('\nwrite_restart $r')
+        # write to input file
+        with open(self.IN_FNAME,'w') as fi:
+            for row in order:
+                fi.write(row)
 
-    # TODO: parallel implementation except for dividing on 3 functions
+    # TODO: parallel implementation without division into 3 methods
     def prepare(self,newrestart = None, parm = None, vars = None, options = None):
         if newrestart != None:
             self.updateRestartFile(newrestart)
@@ -376,6 +409,14 @@ class Simulation:
         self.restart = True
         # print('restart file updated')
 
+    def updateXyz(self, newxyz):
+        with open(os.path.join(self.WD,'tmp.xyz'),'w') as fo:
+            for row in newxyz:
+                fo.write(row)
+        self.vars['c'] = os.path.join(self.WD,'tmp.xyz')
+        self.vars['ndump'] = 0
+
+
     def getRestartFile(self):
         rname = os.path.join(self.WD, self.vars['d'])
         assert self.restart == True, f'Restart file was requested before actual MD calculation: {rname}'
@@ -412,24 +453,13 @@ if TEST:
         'doLongES':True
         }
     s1 = Simulation(0.0,'/home/artem/LAMMPS_TEST/dbg/0.0','/home/artem/LAMMPS_TEST/lammps.data')
-    s2 = Simulation(0.5,'/home/artem/LAMMPS_TEST/dbg/0.5','/home/artem/LAMMPS_TEST/lammps.data', vars = {'N':500})
-    s1.clearDir([])
-    s2.clearDir(['ekhgeg897wg843'])
-    s1.IN_FNAME = 'lammps.inp.0.0'
-    s2.IN_FNAME = 'lammps.inp.0.5'
+    s2 = Simulation(0.5,'/home/artem/LAMMPS_TEST/dbg/0.5','/home/artem/LAMMPS_TEST/lammps.data', vars = {'N':600})
+    s1.clearDir()
+    s2.clearDir()
     s1.runMD(vars = {'N':600})
-    s1.runMD()
-    s1.clearDir([])
-    s2.clearDir(['ekhgeg897wg843'])
-    # s1.updateRestartFile('lammps.restart')
-    # s1.runMD(options=opts,
-    #     vars={
-    #         'alpha':1.0, 
-    #         'N':1000
-    #         }
-            # )
     s2.runMD()
-    d = os.getcwd()
+    # s1.clearDir([])
+    # s2.clearDir()
     r1 = s1.getRestartFile()
     r2 = s2.getRestartFile()
     s1.runMD(r2)
