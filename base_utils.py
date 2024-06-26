@@ -1,9 +1,6 @@
 import os, re, collections, shutil, json, sys
 import numpy as np
 
-TEST = False
-
-
 with open('data/PubChemElements_all.json','r') as dat:
     ELEMENTS = json.load(dat)
 
@@ -524,13 +521,15 @@ def readXYZ(file,index=None):
                     break
             if nf==indices[0]:
                 xyz = []
-                xyz.append(f'{na}\n')
-                xyz.append(f'Frame {nf}\n')
+                # xyz.append(f'{na}\n')
+                # xyz.append(f'Frame {nf}\n')
                 for i in range(na):
                     line = next(lines)
                     row = line.split()
-                    el, x, y, z = row[-4:]
-                    xyz.append(' '.join([el, x, y, z]) + '\n')
+                    # el, x, y, z = row[-4:]
+                    # xyz.append(' '.join([el, x, y, z]) + '\n')
+                    pe = row[-1]
+                    xyz.append(' '.join([pe]) + '\n')
                 frames.append(xyz)
                 indices.pop(0)
                 if len(indices)==0:
@@ -543,6 +542,9 @@ def readXYZ(file,index=None):
         return frames[0]
     return frames
 
+pe = readXYZ('/home/artem/LAMMPS/test/pe/traj.xyz')
+initial = readXYZ('/home/artem/LAMMPS/test/pe/initial.xyz')
+print('ok')
 # xyz1 = readXYZ('/home/artem/LAMMPS/test/unwrap/traj.xyz')
 # xyz2 = readXYZ('/home/artem/LAMMPS/test/unwrap/traj-unwrap.xyz')
             
@@ -972,7 +974,7 @@ def xyz_to_pdb(traj_xyz, cell, traj_pdb=None, as_np=False):
 # os.chdir('/home/artem/PAM/24.10-6ns/')
 # xyz_to_pdb('/home/artem/PAM/24.10-6ns/1.000e+00/min.xyz',CELL)
 # print(0)
-
+TEST=False
 if TEST:
     import time
     #xyz (eof)
