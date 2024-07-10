@@ -44,6 +44,11 @@ KEYS = {
     'minimize' : '1.0e-4 1.0e-6 500 1000'
 }
 
+COMP = {
+    'compute peratom' : 'all pe/atom'
+}
+
+
 THERMO_PATT = {
     'time':'Time',
     'temp':'Temp',
@@ -103,7 +108,7 @@ def runMD(args):
         assert os.path.exists(TRJ_FNAME), 'Trajectory file not found'
         # nMin = min(range(len(dE)), key=dE.__getitem__)
         nMin = min(range(len(dE)//2,len(dE)), key=dE.__getitem__)
-        print(dE)
+        # print(dE)
         minEStruc, lastStruc, results = {}, {}, {}
         minEStruc['energy'], minEStruc['bias'], minEStruc['xyz'] = \
             dE[nMin], dV[nMin], base_utils.readXYZ(TRJ_FNAME,nMin*K)
@@ -156,7 +161,8 @@ class Simulation:
         'doLongES' : True,
         'doNPT' : False,
         'unwrapXYZ' : False,
-        'optimize' : False
+        'optimize' : False,
+        'compute PE' : False
     }
     def __init__(self,alpha,WD,datfile,xyz = None, ndump = None, parm = None, vars = None, options = None):
 
@@ -242,7 +248,7 @@ class Simulation:
     def _checkParm(self):
         self._n = int(self.vars['N'])
         self._nth = int(self.keys['thermo'])
-        self._ntr = int(self.keys['dump'].split()[-2])
+        self._ntr = int(self.keys['dump'].split()[3])
         thermst = self.keys['thermo_style'].split()
         assert 'custom' == thermst[0], 'custom thermo_style required. For example: "thermo_style     custom time temp pe ke press vol density"'
         assert set(thermst[1:]).issubset(set(THERMO_PATT)), f'unknown properties in thermo_style: {", ".join([f"{i}" for i in set(thermst[1:])-set(THERMO_PATT)])}'
@@ -327,6 +333,9 @@ class Simulation:
         if self.options['unwrapXYZ']:
             keys['dump'] = 'DUMPFILE all custom 1 $t element xu yu zu'
             print('WARNING: atomic coordinates will be printed in unwrapped format')
+        comp = ''
+        if self.options['compute PE']:
+            comp = 'compute peratom ' + COMP['compute peratom'] + '\n'
         read = '\n\nread_data $d\n\n'
         if self.restart:
             block2 = [i for i in block2 if i not in unused_restart]
@@ -351,9 +360,9 @@ class Simulation:
         if self.options['optimize']:
             order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + rowsm
         else:
-            order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + rows3 + ['\nreset_timestep 0\nrun $N\n\n\nwrite_restart $r']
+            order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + [comp] + rows3 + ['\nreset_timestep 0\nrun $N\n\n\nwrite_restart $r']
             if self.options['minBeforeMD']:
-                order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + rowsm + rows3 + ['\nreset_timestep 0\nrun $N\n\n\nwrite_restart $r']
+                order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + [comp] + rowsm + rows3 + ['\nreset_timestep 0\nrun $N\n\n\nwrite_restart $r']
             if self.options['minAfterMD']:
                 print('WARNING: minimization after MD not implemented, skip it')
         # write to input file

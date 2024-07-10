@@ -521,6 +521,76 @@ def readXYZ(file,index=None):
                     break
             if nf==indices[0]:
                 xyz = []
+                xyz.append(f'{na}\n')
+                xyz.append(f'Frame {nf}\n')
+                for i in range(na):
+                    line = next(lines)
+                    row = line.split()
+                    el, x, y, z = row[-4:]
+                    xyz.append(' '.join([el, x, y, z]) + '\n')
+                    # pe = row[-1]
+                    # xyz.append(' '.join([pe]) + '\n')
+                frames.append(xyz)
+                indices.pop(0)
+                if len(indices)==0:
+                    break
+            else:
+                for i in range(na):
+                    _ = next(lines)
+            nf+=1
+    if len(frames)==1:
+        return frames[0]
+    return frames
+
+# return only 'PROPERTY' column from 'ITEM: ATOMS element x y z PROPERTY'
+def readPE(file,index=None): #TODO: remove this cringe
+    frames = []
+    nf = 0
+    with open(file,'r') as fi:
+        nlines = sum(1 for i in fi)
+        fi.seek(0)
+        line = fi.readline()
+        if 'ITEM' in line:
+            offset = 1
+            while True:
+                if 'ITEM: ATOMS' in line:
+                    break
+                if 'ITEM: NUMBER OF ATOMS' in line:
+                    na = int(fi.readline())
+                    offset+=1
+                line = fi.readline()
+                offset+=1
+        else:
+            offset = 2
+            na = int(line)        
+        assert nlines%(na+offset)==0, 'corrupted or nonstandart xyz file'
+        nframes = nlines//(na+offset)
+        fi.seek(0)
+        lines = iter(fi.readlines())
+        if index !=None: # иначе возвращаем все фреймы
+            indices = []
+            if type(index) is list:
+                indices+=index
+            else:
+                indices.append(index)
+            for i in range(len(indices)):
+                ind = indices[i]
+                assert ind<nframes, f'wrong index requested: {ind}'
+                if ind<0:
+                    ind+=nframes
+                    assert ind>=0, f'wrong index requested: {indices[i]}'
+                    indices[i]=ind
+            indices = sorted(indices)
+        else:
+            indices = [i for i in range(nframes)]
+        while True:
+            for i in range(offset):
+                try:
+                    _ = next(lines)
+                except StopIteration:
+                    break
+            if nf==indices[0]:
+                xyz = []
                 # xyz.append(f'{na}\n')
                 # xyz.append(f'Frame {nf}\n')
                 for i in range(na):
@@ -542,9 +612,9 @@ def readXYZ(file,index=None):
         return frames[0]
     return frames
 
-pe = readXYZ('/home/artem/LAMMPS/test/pe/traj.xyz')
-initial = readXYZ('/home/artem/LAMMPS/test/pe/initial.xyz')
-print('ok')
+# pe = readXYZ('/home/artem/LAMMPS/test/pe/traj.xyz')
+# initial = readXYZ('/home/artem/LAMMPS/test/pe/initial.xyz')
+# print('ok')
 # xyz1 = readXYZ('/home/artem/LAMMPS/test/unwrap/traj.xyz')
 # xyz2 = readXYZ('/home/artem/LAMMPS/test/unwrap/traj-unwrap.xyz')
             
