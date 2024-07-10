@@ -61,12 +61,14 @@ THERMO_PATT = {
 
     # TODO implement energy minimization
 def runMD(args):
-    WD, IN_FNAME, DATA_FNAME, ERR_FNAME, TRJ_FNAME, K, PATT, *_ = args
+    WD, IN_FNAME, DATA_FNAME, ERR_FNAME, TRJ_FNAME, K, PATT, ncores,  *_ = args
     os.chdir(WD)
     assert os.path.exists(IN_FNAME), 'Input file not found'
     assert os.path.exists(DATA_FNAME), 'Data file not found'
     # CMD = [os.path.join(LAMMPS_PATH,'lmp'), '-i', IN_FNAME]
     CMD = ['lmp', '-i', IN_FNAME]
+    if ncores > 1:
+        CMD = ['mpirun','-n',f'{ncores}','lmp', '-i', IN_FNAME]
     thl = False
     nstep = 0
     dE, dV = [], []

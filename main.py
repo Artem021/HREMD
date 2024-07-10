@@ -13,9 +13,9 @@ JobName, CalcDir, Seed, Temperature, EnergyUnits, LAMMPS_PATH, DataFile, \
         'DataFile', 'XyzFile', 'MDsteps', 'Iterations', 'AlphaRange'))
 
 unrestrictedExchange, selectLastStruc, changeOrder, addWorlds, delWorlds, Pmin, \
-    Pmax, Ncheck, Nmax, NPTs = map(REMDSettings.get, ('unrestrictedExchange',\
+    Pmax, Ncheck, Nmax, NPTs, ncores = map(REMDSettings.get, ('unrestrictedExchange',\
         'selectLastStruc', 'changeOrder', 'addWorlds', 'delWorlds', 'Pmin', 'Pmax', \
-        'Ncheck', 'Nmax', 'withNPT'))
+        'Ncheck', 'Nmax', 'withNPT', 'cores_per_replica'))
 
 wd = os.path.join(CalcDir,JobName)
 
@@ -42,7 +42,7 @@ parm = {
     } # TODO: add feature to getXyzfromData()
 
 
-remdSim = REMD(AlphaRange, DataFile, wd, Nmax=Nmax, seed=Seed, T=Temperature, vars=vars, NPTs = NPTs, selectLastStruc=selectLastStruc,options=options, parm=parm)
+remdSim = REMD(AlphaRange, DataFile, wd, Nmax=Nmax, seed=Seed, T=Temperature, vars=vars, NPTs = NPTs, Ncores = ncores, selectLastStruc=selectLastStruc,options=options, parm=parm)
 
 remdSim.unrestrictedExchange = unrestrictedExchange
 remdSim.selectLastStruc = selectLastStruc

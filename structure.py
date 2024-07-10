@@ -166,7 +166,7 @@ class REMD:
     # assert selectLastStruc == True, 'search for local minimum is not implemented'
     assert delWorlds is False, 'deleting worlds is not implemented'
 
-    def __init__(self, alphaRange, datafile, baseDir, Nmax=15, seed=999999, T=273.15, NPTs=None, selectLastStruc=True,  parm=None, vars=None, options=None, *other):
+    def __init__(self, alphaRange, datafile, baseDir, Nmax=15, seed=999999, T=273.15, NPTs=None, Ncores=1, selectLastStruc=True,  parm=None, vars=None, options=None, *other):
         assert os.path.exists(datafile), f'Data file not found: {datafile}'
         assert len(alphaRange) > 1, 'Not enough initial worlds for REMD (N must be >=2)'
         assert Nmax >= len(alphaRange), f'The requested number of worlds ({len(alphaRange)}) exceeds Nmax = {Nmax}'
@@ -210,7 +210,7 @@ class REMD:
                     print(f'Flexible cell in world with alpha = {self.alphaSet[i][0]}')
             else:
                 raise RuntimeError('unknown type, must be `list` or `integer`')
-
+        self.Ncores = Ncores
         self.swapCount = [0 for _ in range(len(self.alphaSet)-1)]
         self.Counter = ExchangeCounter(self.alphaSet, baseDir)
         self.randomGenerator = np.random.default_rng(self.seed)
@@ -257,7 +257,7 @@ class REMD:
         args = []
         for sim in sims:
             sim.prepare()
-            args.append((sim.WD, sim.IN_FNAME, sim.vars['d'], sim.ERR_FNAME, sim.TRJ_FNAME, sim.k, sim.patt))
+            args.append((sim.WD, sim.IN_FNAME, sim.vars['d'], sim.ERR_FNAME, sim.TRJ_FNAME, sim.k, sim.patt, self.Ncores))
         with mp.Pool(len(self.alphaSet)) as pool:
             # results = pool.map(self._runMDSingle, sims)
             results = pool.map(engines.runMD, args)

@@ -1,6 +1,6 @@
 {
     "GLOBAL": {
-        "JobName": "23.06",
+        "JobName": "10.07",
         "CalcDir": "/home/artem/LAMMPS_TEST/macro",
         "Seed": 999999,
         "Temperature": 298.15,
@@ -8,8 +8,8 @@
         "LAMMPS_PATH" : "/home/artem/LAMMPS/lammps-static/bin/",
         "DataFile" : "/home/artem/LAMMPS_TEST/macro.data",
         "XyzFile" : null,
-        "MDsteps" : 2500,
-        "Iterations": 500,
+        "MDsteps" : 100,
+        "Iterations": 5,
         "AlphaRange": [
             0.0, 
             0.05,
@@ -38,7 +38,8 @@
         "Pmax" : 80,
         "Ncheck" : 20,
         "Nmax" : 22,
-        "withNPT" : null
+        "withNPT" : null,
+        "cores_per_replica" : 2
     },
     "LAMMPS_Options": {
         "minBeforeMD" : true,
