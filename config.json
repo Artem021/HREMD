@@ -38,7 +38,8 @@
         "Pmax" : 80,
         "Ncheck" : 20,
         "Nmax" : 22,
-        "withNPT" : null,
+        "withNPT" : [-1],
+        "delayNPT": 2,
         "cores_per_replica" : 1
     },
     "LAMMPS_Options": {

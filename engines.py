@@ -333,7 +333,7 @@ class Simulation:
         else:
             keys['kspace_modify'] = keys['kspace_modify'].replace('compute yes','compute no')
         if self.options['doNPT']:
-            keys['fix 1'] = 'all npt temp $T $T 20.0 iso 1 1 500'
+            keys['fix 1'] = 'all npt temp $T $T 100 iso 1 1 1000'
         if self.options['unwrapXYZ']:
             keys['dump'] = 'DUMPFILE all custom 1 $t element xu yu zu'
             print('WARNING: atomic coordinates will be printed in unwrapped format')

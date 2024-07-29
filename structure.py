@@ -161,12 +161,13 @@ class REMD:
     Ncheck = 10 # number of iterations between attempts to change alpha set
     Pmin = 10 # в %
     Pmax = 80 # в %
+
     
 
     # assert selectLastStruc == True, 'search for local minimum is not implemented'
     assert delWorlds is False, 'deleting worlds is not implemented'
 
-    def __init__(self, alphaRange, datafile, baseDir, Nmax=15, seed=999999, T=273.15, NPTs=None, Ncores=1, selectLastStruc=True,  parm=None, vars=None, options=None, *other):
+    def __init__(self, alphaRange, datafile, baseDir, Nmax=15, seed=999999, T=273.15, NPTs=[], delayNPT=1, Ncores=1, selectLastStruc=True,  parm=None, vars=None, options=None, *other):
         assert os.path.exists(datafile), f'Data file not found: {datafile}'
         assert len(alphaRange) > 1, 'Not enough initial worlds for REMD (N must be >=2)'
         assert Nmax >= len(alphaRange), f'The requested number of worlds ({len(alphaRange)}) exceeds Nmax = {Nmax}'
@@ -198,18 +199,20 @@ class REMD:
         self.initStruc = Structure(datafile, None, None, None, None, None, None)
         self.alphaSet = self._buildAlphaSet(alphaRange, self.initStruc, datafile, parm=self.initParm, vars=self.initVars, options=self.initOptions, *other)
         self.idump = [i for i in range(len(self.alphaSet))]
+        self.withNPT = [self.alphaSet[i][2] for i in NPTs]
+        self.delayNPT = delayNPT
         
-        if NPTs != None: # TODO: more convinient and general way to do this?
-            if type(NPTs) is int:
-                assert NPTs < len(self.alphaSet), 'incorrect index'
-                self.alphaSet[NPTs][2]._updateOpt({'doNPT': True})
-                print(f'Flexible cell in world with alpha = {self.alphaSet[NPTs][0]}')
-            elif type(NPTs) is list:
-                for i in NPTs:
-                    self.alphaSet[i][2]._updateOpt({'doNPT': True})
-                    print(f'Flexible cell in world with alpha = {self.alphaSet[i][0]}')
-            else:
-                raise RuntimeError('unknown type, must be `list` or `integer`')
+        # if NPTs != None: # TODO: more convinient and general way to do this?
+        #     if type(NPTs) is int:
+        #         assert NPTs < len(self.alphaSet), 'incorrect index'
+        #         self.alphaSet[NPTs][2]._updateOpt({'doNPT': True})
+        #         print(f'Flexible cell in world with alpha = {self.alphaSet[NPTs][0]}')
+        #     elif type(NPTs) is list:
+        #         for i in NPTs:
+        #             self.alphaSet[i][2]._updateOpt({'doNPT': True})
+        #             print(f'Flexible cell in world with alpha = {self.alphaSet[i][0]}')
+        #     else:
+        #         raise RuntimeError('unknown type, must be `list` or `integer`')
         self.Ncores = Ncores
         self.swapCount = [0 for _ in range(len(self.alphaSet)-1)]
         self.Counter = ExchangeCounter(self.alphaSet, baseDir)
@@ -256,7 +259,11 @@ class REMD:
         strucs = [i[1] for i in self.alphaSet] # not very careful TODO
         args = []
         for sim in sims:
-            sim.prepare()
+            if sim in self.withNPT and self.Niter > self.delayNPT:
+                print(f'Iter {self.Niter}: NPT enabled')
+                sim.prepare(options={'doNPT':True})
+            else:
+                sim.prepare()
             args.append((sim.WD, sim.IN_FNAME, sim.vars['d'], sim.ERR_FNAME, sim.TRJ_FNAME, sim.k, sim.patt, self.Ncores))
         with mp.Pool(len(self.alphaSet)) as pool:
             # results = pool.map(self._runMDSingle, sims)
