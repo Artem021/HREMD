@@ -48,3 +48,7 @@ test.py
 27.06/PES-185/lammps.restart
 27.06/PES-185/log.lammps
 27.06/PES-185/traj.xyz
+benzene.xyz
+compute.py
+gen_struc.py
+log.lammps

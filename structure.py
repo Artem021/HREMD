@@ -440,7 +440,7 @@ class REMD:
         #         fo.write(row)
 
 def optimize(args, kwargs):
-    wd, datafile, xyz = args
+    wd, datafile, xyz, cores = args
     try:
         os.mkdir(wd)
     except:
@@ -449,7 +449,7 @@ def optimize(args, kwargs):
     # print(kwargs)
     # print(*kwargs)
     sim = engines.Simulation(1.0, wd, datafile, xyz = xyz, **kwargs)
-    args = (wd, sim.IN_FNAME, sim.vars['d'], sim.ERR_FNAME, sim.TRJ_FNAME, sim.k, sim.patt)
+    args = (wd, sim.IN_FNAME, sim.vars['d'], sim.ERR_FNAME, sim.TRJ_FNAME, sim.k, sim.patt, cores)
     sim.prepare()
     e0, e1, xyzopt = engines.runOpt(args)
     print(f'Optimization: {e0:.2f} --> {e1:.2f} kcal/mol')
@@ -458,7 +458,7 @@ def optimize(args, kwargs):
     shutil.rmtree(wd)
     return xyzopt
 
-def optimizeFrames(trjfile, datafile, sort=True, maxp = 10, **kwargs):
+def optimizeFrames(trjfile, datafile, sort=True, maxp = 12, cores=1, **kwargs):
     args = []
     XYZframes = base_utils.readXYZ(trjfile)
     wd = os.path.dirname(os.path.abspath(trjfile))
@@ -470,7 +470,7 @@ def optimizeFrames(trjfile, datafile, sort=True, maxp = 10, **kwargs):
         with open(fname,'w') as fo:
             for line in frame:
                 fo.write(line)
-        args.append([(os.path.join(optdir, f'opt-{i+1}'), datafile, os.path.abspath(fname)),kwargs])
+        args.append([(os.path.join(optdir, f'opt-{i+1}'), datafile, os.path.abspath(fname), cores),kwargs])
     # print(args)
     with mp.Pool(maxp) as pool:
         # opt_frames = pool.starmap(optimize, args)
