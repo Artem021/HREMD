@@ -829,11 +829,14 @@ def getXyzLmp(file):
     index_map = {str(i+1):el for i,el in enumerate(elements)}
     with open(file,'r') as dat:
         coord = getField(dat,'Atoms')
-    assert len(coord[0])==7, 'Only full atom style supported'
+    assert len(coord[0])==7 or len(coord[0])==10, 'Only full atom style supported'
     xyz.append(f'{len(coord)}\n')
     xyz.append(f'Coordinates from datafile: {file}\n')
     for row in coord:
-        *_, ni, _, x, y, z = row
+        if len(coord[0])==10:
+            *_, ni, _, x, y, z, _, _, _ = row
+        else:
+            *_, ni, _, x, y, z = row
         el = index_map[ni]
         xyz.append(' '.join([el, x, y, z]) + '\n')
     return xyz

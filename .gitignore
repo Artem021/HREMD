@@ -51,4 +51,5 @@ test.py
 benzene.xyz
 compute.py
 gen_struc.py
-log.lammps
+mpitest
+*log*
