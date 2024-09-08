@@ -53,3 +53,5 @@ compute.py
 gen_struc.py
 mpitest
 *log*
+config.json
+config.json

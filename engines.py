@@ -140,6 +140,8 @@ def runOpt(args):
     exc = proc.wait()
     proc.stdout.close()
     t = time.time()
+    if TRJ_FNAME=='':
+        return
     if exc:
         e0 = e1 = float('NaN')
         xyz = None
@@ -158,6 +160,7 @@ class Simulation:
     RST_FNAME = 'lammps.restart'
     TRJ_FNAME = 'traj.xyz'
     ERR_FNAME = 'lammps.error'
+    DAT_FNAME = 'lammps.data'
 
     OPTS = {
         'minBeforeMD' : True,
@@ -166,7 +169,8 @@ class Simulation:
         'doNPT' : False,
         'unwrapXYZ' : False,
         'optimize' : False,
-        'compute PE' : False
+        'compute PE' : False,
+        'blank' : False
     }
     def __init__(self,alpha,WD,datfile,xyz = None, ndump = None, parm = None, vars = None, options = None):
 
@@ -369,6 +373,9 @@ class Simulation:
                 order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + [comp] + rowsm + rows3 + ['\nreset_timestep 0\nrun $N\n\n\nwrite_restart $r']
             if self.options['minAfterMD']:
                 print('WARNING: minimization after MD not implemented, skip it')
+        if self.options['blank']:
+            print('Warning: no "run" or "minimize" task for lammps')
+            order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + ['\n\n\nwrite_data %s\n\n' % os.path.join(self.WD, self.DAT_FNAME)]
         # write to input file
         with open(self.IN_FNAME,'w') as fi:
             for row in order:

@@ -55,7 +55,7 @@ remdSim.Ncheck = Ncheck
 
 remdSim.runREMD(Niter)
 
-optimizeFrames(os.path.join(wd,'structures.xyz'), DataFile, maxp=20, cores=1, parm = {
+optimizeFrames(os.path.join(wd,'structures.xyz'), DataFile, maxp=10, cores=ncores, parm = {
 # optimizeFrames('/home/artem/LAMMPS_TEST/macro/22.06/structures.xyz', DataFile, parm = {
     'minimize' : '1.0e-4 1.0e-6 5000 1000', 
     'write_dump' : ' all xyz $t modify element '+' '.join(elem),

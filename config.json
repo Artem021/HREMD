@@ -1,6 +1,6 @@
 {
     "GLOBAL": {
-        "JobName": "08.08-mono_8_90",
+        "JobName": "08.09-TEST",
         "CalcDir": "/home/md/md/PES-185_dens",
         "Seed": 999999,
         "Temperature": 600.0,
@@ -8,8 +8,8 @@
         "LAMMPS_PATH" : "",
         "DataFile" : "/home/md/pysimm/pysimm/PES_185_dens_box/x8_90_mono/uniform_polymer_soft.lmps",
         "XyzFile" : null,
-        "MDsteps" : 2500,
-        "Iterations": 250,
+        "MDsteps" : 500,
+        "Iterations": 5,
         "AlphaRange": [
             0.0, 
             0.05,

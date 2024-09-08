@@ -1,4 +1,4 @@
-import os,shutil, time
+import os,shutil, time, tempfile
 import numpy as np
 import multiprocessing as mp
 import base_utils
@@ -486,7 +486,8 @@ def optimizeFrames(trjfile, datafile, sort=True, maxp = 12, cores=1, **kwargs):
     if sort:
         opt_frames = sorted(opt_frames, key= lambda x: float(x[1].split()[2]))
     os.chdir(wd)
-    with open(trjfile[:-4]+'-opt.xyz','w') as fo:
+    optfxyz = os.path.join(wd,trjfile[:-4]+'-opt.xyz')
+    with open(optfxyz,'w') as fo:
         for frame in opt_frames:
             for line in frame:
                 fo.write(line)
@@ -494,6 +495,25 @@ def optimizeFrames(trjfile, datafile, sort=True, maxp = 12, cores=1, **kwargs):
     print(f'Number of successful jobs: {len(opt_frames)}')
     print(f'Number of failed jobs: {len(XYZframes)-len(opt_frames)}')
     shutil.rmtree(optdir)
+    write_data(wd,datafile,optfxyz,kwargs)
+    print('data file with relaxed structure: %s' % optfxyz)
+
+
+
+def write_data(wd, data, fxyz,**kwargs):
+    # with tempfile.NamedTemporaryFile(dir=wd) as fi:
+    sim = engines.Simulation(1.0, wd, data,**kwargs)
+    _xyz = base_utils.readXYZ(fxyz, 0)
+    sim.updateXyz(_xyz)
+    sim.prepare(options={'blank':True})
+    sim.DAT_FNAME = 'REMD_opt.data'
+    sim.TRJ_FNAME = ''
+    args = (sim.WD, sim.IN_FNAME, sim.vars['d'], sim.ERR_FNAME, sim.TRJ_FNAME, sim.k, sim.patt, 1)
+    res = engines.runOpt(args)
+    sim.update(res)
+
+
+
 
 
 
@@ -503,6 +523,9 @@ def optimizeFrames(trjfile, datafile, sort=True, maxp = 12, cores=1, **kwargs):
 # global parms: T, N, seed, units, LAMMPS path
 # global options: [options] + doMTD, unrestrictedExchange, selectLastStruc, addWorlds, delWorlds + Pmin, Pmax, Ncheck
 if __name__=='__main__':
+    parm = {'improper_style' : 'umbrella', 'dihedral_style' : 'harmonic'}
+    write_data('/home/md/md/PES-185_dens/08.09-TEST','/home/md/pysimm/pysimm/PES_185_dens_box/x8_90_mono/uniform_polymer_soft.lmps','/home/md/md/PES-185_dens/08.09-TEST/structures-opt.xyz', parm=parm)
+    exit()
     # alphaRange = [0.7, 0.8, 0.9, 1.0]
     alphaRange = [0.0, 1.0]
     # initStruc, alphaRange, datafile, baseDir, parm=None, vars=None, options=None, *other
