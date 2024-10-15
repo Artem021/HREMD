@@ -1,24 +1,22 @@
 {
     "GLOBAL": {
-        "JobName": "08.09-TEST",
-        "CalcDir": "/home/md/md/PES-185_dens",
+        "JobName": "remd_x20",
+        "CalcDir": "/home/md/md/MDtest/publ/opt_md",
         "Seed": 999999,
         "Temperature": 600.0,
         "EnergyUnits" : "real",
         "LAMMPS_PATH" : "",
-        "DataFile" : "/home/md/pysimm/pysimm/PES_185_dens_box/x8_90_mono/uniform_polymer_soft.lmps",
+        "DataFile" : "/home/md/md/MDtest/publ/opt_md/uniform_polymer_soft.lmps",
         "XyzFile" : null,
-        "MDsteps" : 500,
-        "Iterations": 5,
+        "MDsteps" : 2500,
+        "Iterations": 100,
         "AlphaRange": [
             0.0, 
-            0.05,
-            0.0625, 
-            0.075, 
             0.1,
-            0.3, 
-            0.5,
-            0.7, 
+            0.2,  
+            0.4, 
+            0.6,
+			0.8,
             1.0
         ]
     },

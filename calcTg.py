@@ -3,14 +3,14 @@ import subprocess
 from multiprocessing import Pool
 
 # root directory
-WD = '/home/md/md/PES-185_dens/08.08-mono_8_68/Tg/'
+WD = '/home/md/md/PES-185_dens/08.08-mono_8_90/Tg/'
 # WD = '/home/md/md/PAM/Tg'
 try:
     os.mkdir(WD)
 except:
     pass
 # datafile with relaxed cell
-initialData = '/home/md/md/PES-185_dens/08.08-mono_8_68/Tg/PES-185-initial.data'
+initialData = '/home/md/md/PES-185_dens/08.08-mono_8_90/Tg/PES-185-initial.data'
 # initialData = '/home/md/md/PAM/PAM-initial.data'
 
 # pressure range
@@ -30,10 +30,10 @@ ncool = 500000 # 500000
 groups = 5
 
 # mpi tasks per calculation
-CORES = 12
+CORES = 24
 
 # maximum threads
-MAXPROC = 20
+MAXPROC = 10
 
 # lmps exe
 LMP = 'lmp'

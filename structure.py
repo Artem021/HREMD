@@ -447,7 +447,7 @@ class REMD:
         #         fo.write(row)
 
 def optimize(args, kwargs):
-    wd, datafile, xyz, cores = args
+    wd, datafile, xyz, cores,indx = args
     try:
         os.mkdir(wd)
     except:
@@ -459,11 +459,11 @@ def optimize(args, kwargs):
     args = (wd, sim.IN_FNAME, sim.vars['d'], sim.ERR_FNAME, sim.TRJ_FNAME, sim.k, sim.patt, cores)
     sim.prepare()
     e0, e1, xyzopt = engines.runOpt(args)
-    print(f'Optimization: {e0:.2f} --> {e1:.2f} kcal/mol')
+    print(f'[index {indx}] Optimization: {e0:.2f} --> {e1:.2f} kcal/mol')
     if xyzopt != None:
         xyzopt[1] = f'Energy = {e1:.2f} kcal/mol\n'
     shutil.rmtree(wd)
-    return xyzopt
+    return xyzopt,indx
 
 def optimizeFrames(trjfile, datafile, sort=True, maxp = 12, cores=1, **kwargs):
     args = []
@@ -477,14 +477,20 @@ def optimizeFrames(trjfile, datafile, sort=True, maxp = 12, cores=1, **kwargs):
         with open(fname,'w') as fo:
             for line in frame:
                 fo.write(line)
-        args.append([(os.path.join(optdir, f'opt-{i+1}'), datafile, os.path.abspath(fname), cores),kwargs])
+        args.append([(os.path.join(optdir, f'opt-{i+1}'), datafile, os.path.abspath(fname), cores,i),kwargs])
     # print(args)
     with mp.Pool(maxp) as pool:
         # opt_frames = pool.starmap(optimize, args)
         opt_frames = pool.starmap(optimize, args)
-    opt_frames = [i for i in opt_frames if i!=None]
+    opt_frames = [i for i in opt_frames if i[0]!=None]
+    best_frame,indx = min(opt_frames, key= lambda x: float(x[0][1].split()[2]))
+    print(f'best structure with E = {float(best_frame[1].split()[2])} with index = {indx}')
+    with open(os.path.join(wd,trjfile[:-4]+'-best.xyz'),'w') as fo:
+        for line in best_frame:
+            fo.write(line)
+    
     if sort:
-        opt_frames = sorted(opt_frames, key= lambda x: float(x[1].split()[2]))
+        opt_frames = sorted(opt_frames, key= lambda x: float(x[0][1].split()[2]))
     os.chdir(wd)
     optfxyz = os.path.join(wd,trjfile[:-4]+'-opt.xyz')
     with open(optfxyz,'w') as fo:
@@ -495,8 +501,8 @@ def optimizeFrames(trjfile, datafile, sort=True, maxp = 12, cores=1, **kwargs):
     print(f'Number of successful jobs: {len(opt_frames)}')
     print(f'Number of failed jobs: {len(XYZframes)-len(opt_frames)}')
     shutil.rmtree(optdir)
-    write_data(wd,datafile,optfxyz,kwargs)
-    print('data file with relaxed structure: %s' % optfxyz)
+    # write_data(wd,datafile,optfxyz,kwargs)
+    # print('data file with relaxed structure: %s' % optfxyz)
 
 
 
