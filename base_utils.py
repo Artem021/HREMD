@@ -802,28 +802,28 @@ def getField(fobj, field):
     print(f'Warning: no field "{field}" in data file')
 
 # pe = [i.strip() for i in readPE('PES-185-8d_REMD250-Wn_pe.xyz')]
-pe = [i.strip() for i in readPE('test/pe_map/toy_remd_pe.xyz')]
-from math import log10
-import re
+# pe = [i.strip() for i in readPE('test/pe_map/toy_remd_pe.xyz')]
+# from math import log10
+# import re
 # pe = [f'{log10(float(i))}' if float(i)>=1 else i for i in pe]
 # pe = [f'{min(float(i),100)}' for i in pe]
 # pe = [i.strip() for i in readPE('PES-185-Wn-initialOpt_pe.xyz')]
-with open('test/pe_map/uniform_polymer_soft.lmps','r') as dat:
-    lines = dat.readlines()
-    v1 = lines[:lines.index('Atoms\n')]
-    v2 = lines[lines.index('Velocities\n'):]
-    at = getField(dat,'Atoms')
-with open('test/pe_map/toy_remd_pe.lmps','w') as fo:
-    fo.write(''.join(v1))
-    fo.write('Atoms\n\n')
-    for a,e in zip(at,pe):
-        i1,i2,i3,ch0,x,y,z = a
-        fo.write(f'{i1}   {i2}   {i3}   {e}   {x}  {y}  {z}\n')
-    fo.write('\n')
-    fo.write(''.join(v2))
+# with open('test/pe_map/uniform_polymer_soft.lmps','r') as dat:
+#     lines = dat.readlines()
+#     v1 = lines[:lines.index('Atoms\n')]
+#     v2 = lines[lines.index('Velocities\n'):]
+#     at = getField(dat,'Atoms')
+# with open('test/pe_map/toy_remd_pe.lmps','w') as fo:
+#     fo.write(''.join(v1))
+#     fo.write('Atoms\n\n')
+#     for a,e in zip(at,pe):
+#         i1,i2,i3,ch0,x,y,z = a
+#         fo.write(f'{i1}   {i2}   {i3}   {e}   {x}  {y}  {z}\n')
+#     fo.write('\n')
+#     fo.write(''.join(v2))
     
     # # 1	1	6	-0.03094140846201624	-27.981371209780065	-60.9802110353587	-43.39571627780194
-print(0)
+# print(0)
 
 
 # file = '/home/artem/LAMMPS_TEST/macro.data'

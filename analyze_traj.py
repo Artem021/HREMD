@@ -7,17 +7,17 @@ from pyxyz import Confpool
 
 MAX_P = 150
 STARTING_DATAFILE = '/home/md/md/PES-210_dens/16.07-250_2500-Mn-T600/uniform_polymer_soft.lmps'
-# INITIAL_XYZ = '/home/md/md/PES-210_dens/16.07-250_2500-Mn-T600/uniform_polymer.xyz'
-# STARTING_XYZ = '/home/md/md/PES-210_dens/16.07-250_2500-Mn-T600/structures.xyz'
-STARTING_XYZ = '/home/md/md/PES-210_dens/16.07-250_2500-Mn-T600/alpha_0.7_iter1_restart/traj.xyz'
+INITIAL_XYZ = '/home/md/md/PES-210_dens/16.07-250_2500-Mn-T600/uniform_polymer.xyz'
+STARTING_XYZ = '/home/md/md/PES-210_dens/16.07-250_2500-Mn-T600/structures.xyz'
+# STARTING_XYZ = '/home/md/md/PES-210_dens/16.07-250_2500-Mn-T600/alpha_0.7_iter1_restart/traj.xyz'
 # STARTING_XYZ = '/home/md/md/PES-185_dens/16.07-250_2500-Mn-T600/test.xyz'
 aset = [0.0, 0.05, 0.0625, 0.075, 0.1, 0.3, 0.5, 0.7, 1.0]
-aset = [0.7]
+# aset = [0.7]
 p = Confpool()
 
 # proper indexing of dataframe
-# for i in range(len(aset)):
-    # p.include_from_file(INITIAL_XYZ)
+for i in range(len(aset)):
+    p.include_from_file(INITIAL_XYZ)
 print(f'initial size of confpool: {p.size}')
 
 
@@ -30,8 +30,9 @@ results_final = {i:[] for i in aset}
 alphas = {}
 for j,alpha in enumerate(aset):
     # alphas[alpha] = [j+i for i in list(range(2250))[::9]][::10] # every 10
-    alphas[alpha] = [j+i for i in list(range(2500))][::100] # every 100 (MD 2500)
+    # alphas[alpha] = [j+i for i in list(range(2500))][::100] # every 100 (MD 2500)
     # alphas[alpha] = [j+i for i in list(range(2250))[::9]][:11] # first 10
+    alphas[alpha] = [j+i for i in list(range(2250))[::9]][:101] # first 100
     # alphas[alpha] = [j+i for i in list(range(40))[::9]][::10]
     
 # [0] 9 18 27 36 45 54 63 72 81 [90] ...
@@ -66,7 +67,7 @@ for res in sorted(results, key=lambda m: m[1]):
     print(f'      {alp}      {indx}   {ninter}')
 
 df = pd.DataFrame.from_dict(results_final)
-df.to_excel("PES_210_alpha_0.7_iter1.xlsx")
+df.to_excel("PES_210_first100.xlsx")
 
 print(0)
 

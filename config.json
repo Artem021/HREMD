@@ -1,6 +1,6 @@
 {
     "GLOBAL": {
-        "JobName": "remd_x20",
+        "JobName": "remd_x20-rework3",
         "CalcDir": "/home/md/md/MDtest/publ/opt_md",
         "Seed": 999999,
         "Temperature": 600.0,
@@ -12,17 +12,22 @@
         "Iterations": 100,
         "AlphaRange": [
             0.0, 
+            0.05, 
             0.1,
             0.2,  
+            0.3,  
             0.4, 
+            0.5, 
             0.6,
+            0.7,
 			0.8,
+			0.9,
             1.0
         ]
     },
     "REMD_Options": {
         "unrestrictedExchange" : false,
-        "selectLastStruc" : false,
+        "selectLastStruc" : true,
         "changeOrder" : false,
         "addWorlds" : false,
         "delWorlds" : false,
@@ -32,10 +37,10 @@
         "Nmax" : 22,
         "withNPT" : [],
         "delayNPT": 100,
-        "cores_per_replica" : 24
+        "cores_per_replica" : 20
     },
     "LAMMPS_Options": {
-        "minBeforeMD" : true,
+        "minBeforeMD" : false,
         "minAfterMD" : false,
         "doLongES" : false,
         "unwrapXYZ" : false

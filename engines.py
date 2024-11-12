@@ -82,7 +82,7 @@ def runMD(args):
             break
         if thl:
             try:
-                # TODO: extend for unknown number of columns and their order
+                # TODO: extend for unknown number and order of columns
                 _, _, e, _, _, _, _ = [int(stdout_line.split()[0])] + [float(i) for i in stdout_line.split()[1:]]
                 bias = float('NaN')
             except:
@@ -120,6 +120,40 @@ def runMD(args):
             results['biasShift'], results['lastStruc'], results['minEStruc'] = \
                 t-t0, exc, dE, dV, lastStruc, minEStruc
         return results
+
+def run_single_point(args) -> float:
+    WD, IN_FNAME, DATA_FNAME, ERR_FNAME, TRJ_FNAME, K, PATT, ncores, *_ = args
+    os.chdir(WD)
+    assert os.path.exists(IN_FNAME), 'Input file not found'
+    assert os.path.exists(DATA_FNAME), 'Data file not found'
+    # CMD = [os.path.join(LAMMPS_PATH,'lmp'), '-i', IN_FNAME]
+    CMD = ['lmp', '-i', IN_FNAME]
+    if ncores > 1:
+        CMD = ['mpirun','-n',f'{ncores}','lmp', '-i', IN_FNAME]
+    t0 = time.time()
+    e = float('NaN')
+    proc = subprocess.Popen(CMD, stdout=subprocess.PIPE, universal_newlines=True)
+    iterstdout = iter(proc.stdout.readline, "")
+    thl = False
+    for stdout_line in iterstdout:
+        if re.search(PATT,stdout_line) != None:
+            thl = True
+            continue
+        if thl:
+            try:
+                # TODO: extend for unknown number and order of columns
+                _, _, e, _, _, _, _ = [int(stdout_line.split()[0])] + [float(i) for i in stdout_line.split()[1:]]
+                break
+            except:
+                print('Error in pattern of thermo_style header')
+                break
+    exc = proc.wait()
+    proc.stdout.close()
+    t = time.time()
+    if exc:
+        print('WARNING: single point calculation failed for some reason')
+    return e
+
 
 def runOpt(args):
     WD, IN_FNAME, DATA_FNAME, ERR_FNAME, TRJ_FNAME, K, PATT, ncores, *_ = args
@@ -170,7 +204,8 @@ class Simulation:
         'unwrapXYZ' : False,
         'optimize' : False,
         'compute PE' : False,
-        'blank' : False
+        'blank' : False,
+        'single_point' : False
     }
     def __init__(self,alpha,WD,datfile,xyz = None, ndump = None, parm = None, vars = None, options = None):
 
@@ -376,6 +411,8 @@ class Simulation:
         if self.options['blank']:
             print('Warning: no "run" or "minimize" task for lammps')
             order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + ['\n\n\nwrite_data %s\n\n' % os.path.join(self.WD, self.DAT_FNAME)]
+        if self.options['single_point']:
+            order = _vars + ['\n\nclear\n\n'] + rows1 + [read] + rows2 + rows3 + ['\nrun 0\n\n\nwrite_restart $r']            
         # write to input file
         with open(self.IN_FNAME,'w') as fi:
             for row in order:

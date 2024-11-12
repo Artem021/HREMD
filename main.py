@@ -62,5 +62,14 @@ optimizeFrames(os.path.join(wd,'structures.xyz'), DataFile, maxp=10, cores=ncore
     'improper_style' : 'umbrella',
     'dihedral_style' : 'harmonic'
     }, options = {'optimize' : True})
+
+optimizeFrames(os.path.join(wd,'structures_w1.xyz'), DataFile, maxp=10, cores=ncores, parm = {
+# optimizeFrames('/home/artem/LAMMPS_TEST/macro/22.06/structures.xyz', DataFile, parm = {
+    'minimize' : '1.0e-4 1.0e-6 5000 1000', 
+    'write_dump' : ' all xyz $t modify element '+' '.join(elem),
+    'improper_style' : 'umbrella',
+    'dihedral_style' : 'harmonic'
+    }, options = {'optimize' : True})
+
 print(0)
 

@@ -295,15 +295,57 @@ class REMD:
             sim.updateRestartFile(rst1)
             print(f'Failed MD with alpha {alpha} will be restarted from World with alpha = {alpha1}')
 
+    @staticmethod
+    def calc_single_point(world, struc):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            alpha, _, refsim, *_ = world
+            # print(refsim.keys.copy())
+            sim = engines.Simulation(alpha, tmpdir, refsim.datfile, options={'single_point':True}, parm=refsim.keys.copy())
+            _xyz = struc.getXyz()
+            if _xyz:
+                sim.updateXyz(_xyz)
+            sim.prepare()
+            args = (sim.WD, sim.IN_FNAME, sim.vars['d'], sim.ERR_FNAME, sim.TRJ_FNAME, sim.k, sim.patt, 1)
+            total_pe = engines.run_single_point(args)
+            # sim.update()
+            return total_pe
 
-
-
+        
     def _calcP(self, w1, w2):
         a1, struc1, *_ = w1
         a2, struc2, *_ = w2
-        e1 = struc1.getEnergy()
-        e2 = struc2.getEnergy()
-        dE = -e1*a1 -e2*a2 + e2*a1 + e1*a2 # delta = (e1-e2)*(alp2-alp1)
+        classic_scheme = True # delta = beta*[-E(a1,q1) - E(a2,q2) + E(a2,q1) + E(a1,q2)]
+        if classic_scheme:
+            a1q1 = struc1.getEnergy()
+            a2q2 = struc2.getEnergy()
+            a1q2 = REMD.calc_single_point(w1,struc2)
+            a2q1 = REMD.calc_single_point(w2,struc1)
+            dE = a2q1+a1q2-a1q1-a2q2
+            dbg=True
+            if dbg:
+                log = os.path.join(self.baseDir,'prob.txt')
+                if not os.path.exists(log):
+                    open(log,'w').close()
+                _dE = - a1q1*a1 - a2q2*a2 + a2q2*a1 + a1q1*a2
+                with open(log,'a') as fo:
+                    fo.write(f'Iteration {self.Niter}: alpha1 = {a1}; alpha2 = {a2}\n')
+                    fo.write(f'              delta = beta*[-E(a1,q1) - E(a2,q2) + E(a2,q1) + E(a1,q2)]\n')
+                    fo.write(f'              delta = {self.beta}*[-{a1q1} - {a2q2} + {a2q1} + {a1q2}] = {dE*self.beta}\n')
+                    fo.write(f'              p = {min(1.0, np.exp(-dE*self.beta))}\n')
+                    fo.write(f'              _delta = beta*[-E(q1)*a1 - E(q2)*a2 + E(q2)*a1 + E(q1)*a2]\n')
+                    fo.write(f'              _delta = {self.beta}*[-{a1q1*a1} - {a2q2*a2} + {a2q2*a1} + {a1q1*a2}] = {_dE*self.beta}\n')
+                    fo.write(f'              _p = {min(1.0, np.exp(-_dE*self.beta))}\n')
+                print(f'{self.Niter}: alpha1 = {a1}; alpha2 = {a2}')
+                print(f'              delta = beta*[-E(a1,q1) - E(a2,q2) + E(a2,q1) + E(a1,q2)]')
+                print(f'              delta = {self.beta}*[-{a1q1} - {a2q2} + {a2q1} + {a1q2}] = {dE*self.beta}')
+                print(f'              p = {min(1.0, np.exp(-dE*self.beta))}')
+                print(f'              _delta = beta*[-E(q1)*a1 - E(q2)*a2 + E(q2)*a1 + E(q1)*a2]')
+                print(f'              _delta = {self.beta}*[-{a1q1*a1} - {a2q2*a2} + {a2q2*a1} + {a1q1*a2}] = {_dE*self.beta}')
+                print(f'              _p = {min(1.0, np.exp(-_dE*self.beta))}')
+        else:
+            e1 = struc1.getEnergy()
+            e2 = struc2.getEnergy()
+            dE = -e1*a1 -e2*a2 + e2*a1 + e1*a2 # delta = (e1-e2)*(alp2-alp1)
         if np.isnan(dE):
             return float('NaN')
         return min(1.0, np.exp(-dE*self.beta))
@@ -441,10 +483,10 @@ class REMD:
                 with open(self.dumpXYZ,'a') as fo:
                     for row in xyz:
                         fo.write(row)
-        # xyz[1]=f'Energy = {e:.2f} kcal/mol\n'
-        # with open(self.dumpXYZ,'a') as fo:
-        #     for row in xyz:
-        #         fo.write(row)
+                if i==len(self.alphaSet)-1:
+                    with open(self.dumpXYZ[:-4]+'_w1.xyz','a') as fo:
+                        for row in xyz:
+                            fo.write(row)
 
 def optimize(args, kwargs):
     wd, datafile, xyz, cores,indx = args
@@ -495,7 +537,8 @@ def optimizeFrames(trjfile, datafile, sort=True, maxp = 12, cores=1, **kwargs):
     optfxyz = os.path.join(wd,trjfile[:-4]+'-opt.xyz')
     with open(optfxyz,'w') as fo:
         for frame in opt_frames:
-            for line in frame:
+            xyz,indx = frame
+            for line in xyz:
                 fo.write(line)
     print(f'Optimization of {len(XYZframes)} frames done')
     print(f'Number of successful jobs: {len(opt_frames)}')
@@ -520,9 +563,20 @@ def write_data(wd, data, fxyz,**kwargs):
 
 
 
-
-
-
+# test for single point
+# elem = base_utils.getElementsLmp('/home/md/md/HREMD_v1/toy.lmps')
+# struc1 = Structure('/home/md/md/HREMD_v1/toy.lmps','','','','','','','')
+# struc2 = Structure('/home/md/md/HREMD_v1/toy.lmps','','','','','','','')
+# sim1 = engines.Simulation(1.0,'/home/md/md/HREMD_v1/single_point_test','/home/md/md/HREMD_v1/toy.lmps', parm = {'improper_style' : 'umbrella', 'dihedral_style' : 'harmonic','dump_modify' : 'DUMPFILE element '+' '.join(elem)})
+# sim2 = engines.Simulation(0.01,'/home/md/md/HREMD_v1/single_point_test','/home/md/md/HREMD_v1/toy.lmps', parm = {'improper_style' : 'umbrella', 'dihedral_style' : 'harmonic','dump_modify' : 'DUMPFILE element '+' '.join(elem)})
+# world1 = (1.0, struc1, sim1)
+# world2 = (0.01, struc2, sim2)
+# w1s1=REMD.calc_single_point(world1,struc1)
+# w2s2=REMD.calc_single_point(world2,struc2)
+# w1s2=REMD.calc_single_point(world1,struc2)
+# w2s1=REMD.calc_single_point(world2,struc1)
+# print(f'dE = {-w1s1-w2s2+w2s1+w1s2}')
+# exit()
 
 
 
