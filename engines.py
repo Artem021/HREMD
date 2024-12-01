@@ -3,6 +3,29 @@ import base_utils
 
 LAMMPS_PATH = '/home/artem/LAMMPS/lammps-static/bin/'
 
+PLUMED_INPUT = '''m: DIFF ...
+	
+	PATTERN_FILE=%(xray_data)s
+	NAMES_FILE=%(atom_names)s
+	FORCE_TYPE=%(force_type)s
+	FORCE_COEFF=%(force_const)s
+
+	CELL_A=%(cell_a)s
+	CELL_B=%(cell_b)s
+	CELL_C=%(cell_c)s
+		
+	CELL_ALPHA=%(cell_alpha)s 
+	CELL_BETA=%(cell_beta)s
+	CELL_GAMMA=%(cell_gamma)s
+
+...
+
+
+# COLVAR - file with xray diff
+PRINT ARG=m STRIDE=1 FILE=COLVAR
+'''
+
+
 VARS = {
     'N' : 2500,
     'alpha' : 1.0,
@@ -66,15 +89,19 @@ def runMD(args):
     assert os.path.exists(IN_FNAME), 'Input file not found'
     assert os.path.exists(DATA_FNAME), 'Data file not found'
     # CMD = [os.path.join(LAMMPS_PATH,'lmp'), '-i', IN_FNAME]
+    # CMD = ['apptainer', 'exec', '/home/users/igorstan/lammps_plumed.sif', '/opt/lammps/build/lmp', '-i', IN_FNAME]
     CMD = ['lmp', '-i', IN_FNAME]
     if ncores > 1:
-        CMD = ['mpirun','-n',f'{ncores}','lmp', '-i', IN_FNAME]
+        pass
+        # CMD = ['mpirun','-n',f'{ncores}','lmp', '-i', IN_FNAME]
     thl = False
     nstep = 0
     dE, dV = [], []
     t0 = time.time()
     proc = subprocess.Popen(CMD, stdout=subprocess.PIPE, universal_newlines=True)
+    # print(f'WD: {WD}; NP={ncores}')
     for stdout_line in iter(proc.stdout.readline, ""):
+        # print(stdout_line)
         if re.search(PATT,stdout_line) != None:
             thl = True
             continue
@@ -128,14 +155,21 @@ def run_single_point(args) -> float:
     assert os.path.exists(DATA_FNAME), 'Data file not found'
     # CMD = [os.path.join(LAMMPS_PATH,'lmp'), '-i', IN_FNAME]
     CMD = ['lmp', '-i', IN_FNAME]
+    # CMD = ['/opt/lammps/build/lmp', '-i', IN_FNAME]
+    # CMD = ['apptainer', 'exec', '/home/users/igorstan/lammps_plumed.sif', '/opt/lammps/build/lmp', '-i', IN_FNAME]
     if ncores > 1:
-        CMD = ['mpirun','-n',f'{ncores}','lmp', '-i', IN_FNAME]
+        pass
+        # CMD = ['mpirun','-n',f'{ncores}','lmp', '-i', IN_FNAME]
+        # print('MPI parallelization not implemented (k4)')
+        # CMD = ['mpirun','-n',f'{ncores}','apptainer exec /home/users/igorstan/lammps_plumed.sif /opt/lammps/build/lmp', '-i', IN_FNAME]
     t0 = time.time()
     e = float('NaN')
     proc = subprocess.Popen(CMD, stdout=subprocess.PIPE, universal_newlines=True)
     iterstdout = iter(proc.stdout.readline, "")
     thl = False
+    # print(f'\n\n\nWD: {WD}\n\n')
     for stdout_line in iterstdout:
+        # print(stdout_line)
         if re.search(PATT,stdout_line) != None:
             thl = True
             continue
@@ -162,8 +196,10 @@ def runOpt(args):
     assert os.path.exists(DATA_FNAME), 'Data file not found'
     # CMD = [os.path.join(LAMMPS_PATH,'lmp'), '-i', IN_FNAME]
     CMD = ['lmp', '-i', IN_FNAME]
+    # CMD = ['apptainer', 'exec', '/home/users/igorstan/lammps_plumed.sif', '/opt/lammps/build/lmp', '-i', IN_FNAME]
     if ncores > 1:
-        CMD = ['mpirun','-n',f'{ncores}','lmp', '-i', IN_FNAME]
+        pass
+        # CMD = ['mpirun','-n',f'{ncores}','lmp', '-i', IN_FNAME]
     t0 = time.time()
     proc = subprocess.Popen(CMD, stdout=subprocess.PIPE, universal_newlines=True)
     iterstdout = iter(proc.stdout.readline, "")
@@ -195,6 +231,7 @@ class Simulation:
     TRJ_FNAME = 'traj.xyz'
     ERR_FNAME = 'lammps.error'
     DAT_FNAME = 'lammps.data'
+    PLUMED_FNAME = 'plumed.inp'
 
     OPTS = {
         'minBeforeMD' : True,
@@ -205,9 +242,11 @@ class Simulation:
         'optimize' : False,
         'compute PE' : False,
         'blank' : False,
-        'single_point' : False
+        'single_point' : False,
+        'mtd_xrd' : False,
+        'patch_xyz' : False # to solve LAMMPS problem with labelmap when parsing xyz file using `read_dump` command
     }
-    def __init__(self,alpha,WD,datfile,xyz = None, ndump = None, parm = None, vars = None, options = None):
+    def __init__(self,alpha,WD,datfile,xyz = None, ndump = None, parm = None, vars = None, options = None,**kwargs):
 
         self.restart = False
         self._nrst = 0
@@ -224,6 +263,27 @@ class Simulation:
         self.results = None # dict with MD information (TODO: replace with separate class)
         
         assert os.path.isfile(datfile), f'Data file not found: {datfile}'
+        
+        # PLUMED data
+        self.plumed = kwargs.get('plumed',{})
+        # cell information
+        self.cell_a = kwargs.get('cell_a',None)
+        self.cell_b = kwargs.get('cell_b',None)
+        self.cell_c = kwargs.get('cell_c',None)
+        self.cell_alpha = kwargs.get('cell_alpha',None)
+        self.cell_beta = kwargs.get('cell_beta',None)
+        self.cell_gamma = kwargs.get('cell_gamma',None)
+        # parameters (below)
+        
+        
+        if None in [self.cell_a, self.cell_b, self.cell_c, self.cell_alpha, self.cell_beta, self.cell_gamma]:
+            print('read unit cell from datafile')
+            self.cell_a, self.cell_b, self.cell_c, self.cell_alpha, self.cell_beta, self.cell_gamma = base_utils.get_cell_lammps(datfile)
+        else:
+            print('using existing unit cell parameters')
+        
+        self.plumed.update({'cell_a':self.cell_a,'cell_b':self.cell_b,'cell_c':self.cell_c,'cell_alpha':self.cell_alpha,'cell_beta':self.cell_beta,'cell_gamma':self.cell_gamma})
+        
         try:
             with open(datfile,'r') as f:
                 f.read()
@@ -256,10 +316,12 @@ class Simulation:
         self.options = self.OPTS.copy()
         if parm != None:
             self._updateParm(parm)
+            self._updateParm(kwargs.get('parm',{}))
         if vars != None:
             self._updateVar(vars)
         if options != None:
-            self._updateOpt(options)
+            self._updateOpt(options) #FIXME - only kwargs
+            self._updateParm(kwargs.get('options',{}))
         self.vars['d'] = datfile
         self.vars['r'] = rname
         self.vars['t'] = self.TRJ_FNAME
@@ -376,6 +438,15 @@ class Simulation:
         if self.options['unwrapXYZ']:
             keys['dump'] = 'DUMPFILE all custom 1 $t element xu yu zu'
             print('WARNING: atomic coordinates will be printed in unwrapped format')
+        if self.options['mtd_xrd']:
+            if self._check_plumed():
+                print(f'XRD metadynamics requested. plumed file = {os.path.join(self.WD, self.PLUMED_FNAME)}, xray data: {self.plumed["xray_data"]}, output: {os.path.join(self.WD, self.PLUMED_FNAME[:-4]+".out")}')
+                keys['fix mtd'] = f'all plumed plumedfile {os.path.join(self.WD, self.PLUMED_FNAME)} outfile {os.path.join(self.WD, self.PLUMED_FNAME[:-4]+".out")}'
+                # fix mtd all plumed plumedfile example_plumed_input.dat outfile p.log
+                block3.append('fix mtd')
+                self._write_plumed()
+            else:
+                print('XRD metadynamics requested but not all parameters were provided, skip')
         comp = ''
         if self.options['compute PE']:
             comp = 'compute peratom ' + COMP['compute peratom'] + '\n'
@@ -440,6 +511,27 @@ class Simulation:
         self.restart = True
         # self.options = self.OPTS.copy() # options are reset to defaults
 
+    def _check_plumed(self):
+        _required = set(['cell_alpha', 'cell_b', 'atom_names', 'cell_a', 'cell_beta', 'cell_gamma', 'force_const', 'cell_c', 'xray_data', 'force_type'])
+        _diff = _required - set(self.plumed.keys())
+        if len(_diff) > 0:
+            print(f'following metadynamic parameters are missing: {" ".join(_diff)}')
+            return False
+        elif not os.path.exists(self.plumed['atom_names']):
+            print(f'file with atom names not found: {self.plumed['atom_names']}')
+            return False
+        elif not os.path.exists(self.plumed['xray_data']):
+            print(f'diffraction data not found: {self.plumed['xray_data']}')
+            return False
+        else:
+            return True
+        
+        
+
+    def _write_plumed(self):
+        with open(os.path.join(self.WD,self.PLUMED_FNAME),'w') as fo:
+            fo.write(PLUMED_INPUT % self.plumed)
+
     def runMD(self,newrestart = None, parm = None, vars = None, options = None):
         os.chdir(self.WD)
         if newrestart !=None:
@@ -470,6 +562,8 @@ class Simulation:
         with open(os.path.join(self.WD,'tmp.xyz'),'w') as fo:
             for row in newxyz:
                 fo.write(row)
+        if self.options['patch_xyz']:
+            base_utils.patch_xyz(os.path.join(self.WD,'tmp.xyz'))
         self.vars['c'] = os.path.join(self.WD,'tmp.xyz')
         self.vars['ndump'] = 0
 

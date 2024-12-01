@@ -167,10 +167,11 @@ class REMD:
     # assert selectLastStruc == True, 'search for local minimum is not implemented'
     assert delWorlds is False, 'deleting worlds is not implemented'
 
-    def __init__(self, alphaRange, datafile, baseDir, Nmax=15, seed=999999, T=273.15, NPTs=[], delayNPT=1, Ncores=1, selectLastStruc=True,  parm=None, vars=None, options=None, *other):
+    def __init__(self, alphaRange, datafile, baseDir, Nmax=15, seed=999999, T=273.15, NPTs=[], delayNPT=1, Ncores=1, selectLastStruc=True,  parm=None, vars=None, options=None, *other,**kwargs):
         assert os.path.exists(datafile), f'Data file not found: {datafile}'
         assert len(alphaRange) > 1, 'Not enough initial worlds for REMD (N must be >=2)'
         assert Nmax >= len(alphaRange), f'The requested number of worlds ({len(alphaRange)}) exceeds Nmax = {Nmax}'
+        self.cell_a, self.cell_b, self.cell_c, self.cell_alpha, self.cell_beta, self.cell_gamma = base_utils.get_cell_lammps(datafile)
         try:
             os.makedirs(baseDir)
         except FileExistsError:
@@ -188,6 +189,8 @@ class REMD:
         self.initVars = vars
         self.initOptions = options
         self.initOther = other
+        self.kwargs = kwargs
+        self.kwargs.update({'cell_a':self.cell_a,'cell_b':self.cell_b,'cell_c':self.cell_c,'cell_alpha':self.cell_alpha,'cell_beta':self.cell_beta,'cell_gamma':self.cell_gamma})
         self.Nmax = Nmax
         self.seed = seed
         self.T = T
@@ -240,7 +243,7 @@ class REMD:
             else:
                 nrep=0
             wds.append(wd)
-            sim = engines.Simulation(alpha, wd, datafile, parm=parm, vars=vars, options=options)
+            sim = engines.Simulation(alpha, wd, datafile, parm=parm, vars=vars, options=options,**self.kwargs)
             s0 = initStruc
             xyz0 = s0.getXyz()
             struc = Structure(datafile, s0.a, s0.b, s0.c, s0.alpha, s0.beta, s0.gamma, xyz=xyz0) # TODO: make it more obvious
@@ -296,11 +299,13 @@ class REMD:
             print(f'Failed MD with alpha {alpha} will be restarted from World with alpha = {alpha1}')
 
     @staticmethod
-    def calc_single_point(world, struc):
+    def calc_single_point(world, struc,**kwargs):
         with tempfile.TemporaryDirectory() as tmpdir:
             alpha, _, refsim, *_ = world
             # print(refsim.keys.copy())
-            sim = engines.Simulation(alpha, tmpdir, refsim.datfile, options={'single_point':True}, parm=refsim.keys.copy())
+            _opts = refsim.options.copy()
+            _opts.update({'single_point':True})
+            sim = engines.Simulation(alpha, tmpdir, refsim.datfile, options=_opts, parm=refsim.keys.copy(),**kwargs)
             _xyz = struc.getXyz()
             if _xyz:
                 sim.updateXyz(_xyz)
@@ -318,8 +323,8 @@ class REMD:
         if classic_scheme:
             a1q1 = struc1.getEnergy()
             a2q2 = struc2.getEnergy()
-            a1q2 = REMD.calc_single_point(w1,struc2)
-            a2q1 = REMD.calc_single_point(w2,struc1)
+            a1q2 = REMD.calc_single_point(w1,struc2,**self.kwargs)
+            a2q1 = REMD.calc_single_point(w2,struc1,**self.kwargs)
             dE = a2q1+a1q2-a1q1-a2q2
             dbg=True
             if dbg:
@@ -444,7 +449,7 @@ class REMD:
             wd = os.path.join(self.baseDir, f'{self.Nadd}-{alpha:.3e}')
         if datafile == None:
             datafile = self.initDataFile
-        sim = engines.Simulation(alpha, wd, datafile, parm=parm, vars=vars, options=options)
+        sim = engines.Simulation(alpha, wd, datafile, parm=parm, vars=vars, options=options,**self.kwargs)
         ps = self.initStruc
         xyz = ps.getXyz()
         e = ps.getEnergy()
@@ -509,6 +514,8 @@ def optimize(args, kwargs):
 
 def optimizeFrames(trjfile, datafile, sort=True, maxp = 12, cores=1, **kwargs):
     args = []
+    _opts = kwargs.get('options',{})
+    patch = _opts.get('patch_xyz',False)
     XYZframes = base_utils.readXYZ(trjfile)
     wd = os.path.dirname(os.path.abspath(trjfile))
     optdir = os.path.join(wd, f'opt-{time.time()}')
@@ -519,6 +526,9 @@ def optimizeFrames(trjfile, datafile, sort=True, maxp = 12, cores=1, **kwargs):
         with open(fname,'w') as fo:
             for line in frame:
                 fo.write(line)
+        if patch:
+            base_utils.patch_xyz(fname)
+        
         args.append([(os.path.join(optdir, f'opt-{i+1}'), datafile, os.path.abspath(fname), cores,i),kwargs])
     # print(args)
     with mp.Pool(maxp) as pool:
@@ -564,11 +574,15 @@ def write_data(wd, data, fxyz,**kwargs):
 
 
 # test for single point
-# elem = base_utils.getElementsLmp('/home/md/md/HREMD_v1/toy.lmps')
-# struc1 = Structure('/home/md/md/HREMD_v1/toy.lmps','','','','','','','')
-# struc2 = Structure('/home/md/md/HREMD_v1/toy.lmps','','','','','','','')
-# sim1 = engines.Simulation(1.0,'/home/md/md/HREMD_v1/single_point_test','/home/md/md/HREMD_v1/toy.lmps', parm = {'improper_style' : 'umbrella', 'dihedral_style' : 'harmonic','dump_modify' : 'DUMPFILE element '+' '.join(elem)})
-# sim2 = engines.Simulation(0.01,'/home/md/md/HREMD_v1/single_point_test','/home/md/md/HREMD_v1/toy.lmps', parm = {'improper_style' : 'umbrella', 'dihedral_style' : 'harmonic','dump_modify' : 'DUMPFILE element '+' '.join(elem)})
+
+# data = '/home/users/artem_k/aREMD_xrd/paracetamol1.data'
+# elem = base_utils.getElementsLmp(data)
+# struc1 = Structure(data,'','','','','','','')
+# struc2 = Structure(data,'','','','','','','')
+# # sim1 = engines.Simulation(1.0,'/home/users/artem_k/aREMD_xrd/single_point_test',data, parm = {'improper_style' : 'umbrella', 'dihedral_style' : 'harmonic','dump_modify' : 'DUMPFILE element '+' '.join(elem)})
+# # sim2 = engines.Simulation(0.01,'/home/users/artem_k/aREMD_xrd/single_point_test',data, parm = {'improper_style' : 'umbrella', 'dihedral_style' : 'harmonic','dump_modify' : 'DUMPFILE element '+' '.join(elem)})
+# sim1 = engines.Simulation(1.0,'/home/users/artem_k/aREMD_xrd/single_point_test',data, parm = {'dump_modify' : 'DUMPFILE element '+' '.join(elem)})
+# sim2 = engines.Simulation(0.01,'/home/users/artem_k/aREMD_xrd/single_point_test',data, parm = {'dump_modify' : 'DUMPFILE element '+' '.join(elem)})
 # world1 = (1.0, struc1, sim1)
 # world2 = (0.01, struc2, sim2)
 # w1s1=REMD.calc_single_point(world1,struc1)

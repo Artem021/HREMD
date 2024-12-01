@@ -1,6 +1,7 @@
 import os, re, collections, shutil, json, sys
 import numpy as np
 
+print(os.getcwd())
 with open('data/PubChemElements_all.json','r') as dat:
     ELEMENTS = json.load(dat)
 
@@ -443,7 +444,29 @@ def guessElement(mass):
     print(f'element {element} guessed from mass, delta = {abs(mass-closest_mass)}')
     return element
 
+def get_element_by(value, search_by, return_attr='Symbol'):
+    _avail_opts = ['atomicnumber', 'symbol', 'name']
+    _avail_atbs = ['atomicnumber', 'symbol', 'name','atomicmass']
+    search_by = search_by.lower().replace(' ','')
+    return_attr = return_attr.lower().replace(' ','')
+    assert search_by in _avail_opts, f'Unknown property to search: {search_by}. Availibale options are: {" ".join(_avail_opts)}'
+    assert return_attr in _avail_atbs, f'Unknown attribute requested: {return_attr}. Availibale attributes are: {" ".join(_avail_atbs)}'
+    try:
+        _cell = next(x for x in ELEMENTS['Table']['Row'] if x['Cell'][_avail_opts.index(search_by)]==value)
+        return _cell['Cell'][_avail_atbs.index(return_attr)]
+    except StopIteration:
+        print(f'Unable to find atom with {search_by}={value}')
+        return
+        raise ValueError(f'Unable to find atom with {search_by}={value}')
 
+# print(ELEMENTS['Table']['Columns']['Column'])
+# print(get_element_by('h','symbol','name'))
+# print(get_element_by('Cs','symbol','Symbol'))
+# print(get_element_by('Cl','SyMboL ','atomic number '))
+# print(type(get_element_by('Cl','SyMboL ','atomic number ')))
+# print(get_element_by('Cd','SyMboL ','atomic mass'))
+# print(get_element_by('Cu','SyMboL ','atomic mass'))
+# print(0)
 
 # update_inp('/home/artem/LAMMPS_TEST/30.03-PAM-test0/0.000e+00/lammps.restart',{'alpha':1.0})
 # print(0)
@@ -847,6 +870,77 @@ def getElementsLmp(file):
         el = guessElement(m)
         elements.append(el)
     return elements
+
+# replace element symbol in xyz file with its atomic number - need to fix LAMMPS problem with labelmap
+def patch_xyz(file):
+    xyz = readXYZ(file)
+    if isinstance(xyz[0],list):
+        nframes = len(xyz)
+        nat = int(xyz[0][0])
+    else:
+        nat = int(xyz[0])
+        nframes = 1
+        xyz = [xyz]
+    for i, frame in enumerate(xyz):
+        for j, line in enumerate(frame):
+            if j > 1:
+                sym, x, y, z = line.split()
+                lab = get_element_by(sym,'symbol','atomicnumber')
+                if not lab:
+                    raise ValueError(f'element symbol could not be parsed: {sym}')
+                xyz[i][j] = f'{lab}  {x}  {y}  {z}\n'
+    with open(file,'w') as fo:
+        for frame in xyz:
+            for line in frame:
+                fo.write(line)
+    print(f'file patched: {file}')
+
+# patch_xyz('/home/users/artem_k/aREMD_xrd/single_point_test/tmp.xyz')
+
+
+def get_cell_lammps(file):
+    p_flag = 0
+    triclinic = False
+    xy, xz, yz = 0., 0., 0.
+    with open(file,'r') as fi:
+        for line in fi:
+            if 'xlo xhi' in line:
+                xlo, xhi, *_ = line.split()
+                p_flag+=1
+            if 'ylo yhi' in line:
+                ylo, yhi, *_ = line.split()
+                p_flag+=1
+            if 'zlo zhi' in line:
+                zlo, zhi, *_ = line.split()
+                p_flag+=1
+            if 'xy xz yz' in line:
+                triclinic = True
+                xy, xz, yz, *_ = line.split()
+                p_flag+=1
+            if 'Masses' in line:
+                if not ((p_flag == 4 and triclinic) or (p_flag == 3 and not triclinic)):
+                    print('Incorrect cell section in LAMMPS data file!')
+                    return
+    xlo,xhi,ylo,yhi,zlo,zhi,xy,xz,yz = [float(i) for i in [xlo,xhi,ylo,yhi,zlo,zhi,xy,xz,yz]]
+    lx, ly, lz = xhi-xlo, yhi-ylo, zhi-zlo
+    a = lx
+    b = (ly**2+xy**2)**0.5
+    c = (lz**2+xz**2+yz**2)**0.5
+    alpha = np.degrees(np.arccos((xy*xz + ly*yz)/(b*c)))
+    beta = np.degrees(np.arccos(xz/c))
+    gamma = np.degrees(np.arccos(xy/b))
+    return a,b,c,alpha,beta,gamma
+    
+    
+# print(get_cell_lammps('/home/users/artem_k/aREMD_xrd/paracetamol1.data'))
+# print(get_cell_lammps('/home/users/artem_k/aREMD_xrd/HREMD/example/P0_init_SI.lmps'))
+# print(0)
+            
+# elem = getElementsLmp('/home/users/artem_k/aREMD_xrd/paracetamol1.data')
+# print(elem)
+# file = '/home/users/artem_k/aREMD_xrd/pam.xyz'
+# patch_xyz_names(file)
+# exit()
 
 def getXyzLmp(file):
     xyz = []
