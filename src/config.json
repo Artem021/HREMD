@@ -1,0 +1,48 @@
+{
+    "GLOBAL": {
+        "JobName": "mtd_pam_2to1",
+        "CalcDir": "/s/ls4/users/artem_k/aREMD_xrd/",
+        "Seed": 999999,
+        "Temperature": 600.0,
+        "EnergyUnits" : "real",
+        "LAMMPS_PATH" : "/opt/lammps/build/",
+        "DataFile" : "/s/ls4/users/artem_k/aREMD_xrd/force-fields/lammps/start_from_paracetamol2.data",
+        "XyzFile" : null,
+        "MDsteps" : 25,
+        "Iterations": 3,
+        "AlphaRange": [
+            0.0, 
+            1.0
+        ]
+    },
+    "REMD_Options": {
+        "unrestrictedExchange" : false,
+        "selectLastStruc" : false,
+        "changeOrder" : false,
+        "addWorlds" : false,
+        "delWorlds" : false,
+        "Pmin" : 10,
+        "Pmax" : 80,
+        "Ncheck" : 20,
+        "Nmax" : 22,
+        "withNPT" : [],
+        "delayNPT": 100,
+        "cores_per_replica" : 1
+    },
+    "LAMMPS_Options": {
+        "minBeforeMD" : false,
+        "minAfterMD" : false,
+        "doLongES" : false,
+        "unwrapXYZ" : false,
+        "patch_xyz" : true,
+        "mtd_xrd" : true
+    },
+    "LAMMPS_Parameters": {
+    },
+    "PLUMED_Options": {
+        "xray_data" : "/s/ls4/users/artem_k/aREMD_xrd/diffraction_patterns/paracetamol1.dat",
+        "atom_names" : "/s/ls4/users/artem_k/aREMD_xrd/force-fields/lammps/names_paracetamol.dat",
+        "force_type" : "MEDIAN_POINT",
+        "force_const" : -4.0
+    }
+}
