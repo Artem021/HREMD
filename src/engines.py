@@ -17,6 +17,7 @@ PLUMED_INPUT = '''m: DIFF ...
 	CELL_ALPHA=%(cell_alpha)s 
 	CELL_BETA=%(cell_beta)s
 	CELL_GAMMA=%(cell_gamma)s
+        GAP=%(gap)s
 
 ...
 
@@ -518,10 +519,10 @@ class Simulation:
             print(f'following metadynamic parameters are missing: {" ".join(_diff)}')
             return False
         elif not os.path.exists(self.plumed['atom_names']):
-            print(f'file with atom names not found: {self.plumed['atom_names']}')
+            print(f'file with atom names not found: {self.plumed["atom_names"]}')
             return False
         elif not os.path.exists(self.plumed['xray_data']):
-            print(f'diffraction data not found: {self.plumed['xray_data']}')
+            print(f'diffraction data not found: {self.plumed["xray_data"]}')
             return False
         else:
             return True
