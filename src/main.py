@@ -2,15 +2,26 @@
 import json, os, subprocess, sys
 from structure import REMD, optimizeFrames
 import base_utils
-
+import argparse
 # reference lammps 
 # /home/users/artem_k/lammps-static/bin/
 
 # apptainer xrd
 # /opt/lammps/build/
 
-with open(f'config.json','r') as parm:
+parser = argparse.ArgumentParser(description='aREMD with XRD metadynamics support')
+parser.add_argument('input', type=str,
+                    help='Location of json file with input options')
+args = parser.parse_args()
+
+print(f'Running REMD simulation from {args.input}')
+with open(args.input,'r') as parm:
     parms = json.load(parm)
+
+
+
+# with open(f'config.json','r') as parm:
+#     parms = json.load(parm)
 #TODO: pass as kwargs to REMD()
 globalParm, REMDSettings, options, parm_lmp, plumed  = map(parms.get, ('GLOBAL','REMD_Options','LAMMPS_Options','LAMMPS_Parameters','PLUMED_Options'))
 

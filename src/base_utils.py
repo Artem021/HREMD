@@ -2,7 +2,7 @@ import os, re, collections, shutil, json, sys
 import numpy as np
 
 print(os.getcwd())
-with open('data/PubChemElements_all.json','r') as dat:
+with open('../data/PubChemElements_all.json','r') as dat:
     ELEMENTS = json.load(dat)
 
 DEFAULT_PARM_CP2K = {

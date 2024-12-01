@@ -235,7 +235,7 @@ class REMD:
         aSet = []
         wds = []
         nrep = 0
-        for alpha in alphas:
+        for i,alpha in enumerate(alphas):
             wd = os.path.join(self.baseDir, f'{alpha:.3e}')
             if wd in wds: # for the case with several identical alphas
                 nrep+=1
@@ -243,7 +243,7 @@ class REMD:
             else:
                 nrep=0
             wds.append(wd)
-            sim = engines.Simulation(alpha, wd, datafile, parm=parm, vars=vars, options=options,**self.kwargs)
+            sim = engines.Simulation(alpha, wd, datafile, parm=parm, vars=vars, options=options,**self.kwargs, world_index=i)
             s0 = initStruc
             xyz0 = s0.getXyz()
             struc = Structure(datafile, s0.a, s0.b, s0.c, s0.alpha, s0.beta, s0.gamma, xyz=xyz0) # TODO: make it more obvious
@@ -449,6 +449,7 @@ class REMD:
             wd = os.path.join(self.baseDir, f'{self.Nadd}-{alpha:.3e}')
         if datafile == None:
             datafile = self.initDataFile
+        # TODO: handle the case where world's index is used in other places
         sim = engines.Simulation(alpha, wd, datafile, parm=parm, vars=vars, options=options,**self.kwargs)
         ps = self.initStruc
         xyz = ps.getXyz()

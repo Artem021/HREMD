@@ -274,6 +274,9 @@ class Simulation:
         self.cell_alpha = kwargs.get('cell_alpha',None)
         self.cell_beta = kwargs.get('cell_beta',None)
         self.cell_gamma = kwargs.get('cell_gamma',None)
+        # world index match
+        self._index = kwargs.get('world_index', None)
+        self._mtd_indices = self.plumed.get('selection', None)
         # parameters (below)
         
         
@@ -440,7 +443,9 @@ class Simulation:
             keys['dump'] = 'DUMPFILE all custom 1 $t element xu yu zu'
             print('WARNING: atomic coordinates will be printed in unwrapped format')
         if self.options['mtd_xrd']:
-            if self._check_plumed():
+            if self._mtd_indices != None and  self._index !=None and self._index not in self._mtd_indices:
+                print(f'World with index={self._index}: XRD metadynamics disabled')
+            elif self._check_plumed():
                 print(f'XRD metadynamics requested. plumed file = {os.path.join(self.WD, self.PLUMED_FNAME)}, xray data: {self.plumed["xray_data"]}, output: {os.path.join(self.WD, self.PLUMED_FNAME[:-4]+".out")}')
                 keys['fix mtd'] = f'all plumed plumedfile {os.path.join(self.WD, self.PLUMED_FNAME)} outfile {os.path.join(self.WD, self.PLUMED_FNAME[:-4]+".out")}'
                 # fix mtd all plumed plumedfile example_plumed_input.dat outfile p.log
