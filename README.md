@@ -10,7 +10,9 @@ This repository contains code for HREMD simulations in <span style="background-c
 
 ## Usage
 
-Edit config.json, specify path to folder with LAMMPS binaries and to your LAMMPS data file.
+Edit config.json in `src` folder, specify path to folder with LAMMPS binaries and to your LAMMPS data file. Choose appropriate number of REMD
+iterations, length of MD simulation and set of worlds.
+
 Run 'python main.py' to start simulation or submit it to SLURM (use calc.sh as example).
 
 ## Common errors
