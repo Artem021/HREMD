@@ -16,3 +16,6 @@ pysimm.sim.in
 
 cluster.py
 utils.py
+parse_data.py
+slurm*.out
+
